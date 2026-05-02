@@ -11,7 +11,7 @@ import './App.css';
 function App() {
   return (
     <AuthProvider>
-      <SocketProvider> { }
+      <SocketProvider> {/* 👈 ADICIONE ESTE PROVIDER */}
         <Router>
           <Routes>
             <Route path="/login" element={<Login />} />
@@ -24,7 +24,7 @@ function App() {
             <Route path="/" element={<Navigate to="/login" replace />} />
           </Routes>
         </Router>
-      </SocketProvider> { }
+      </SocketProvider> {/* 👈 FECHE O PROVIDER */}
     </AuthProvider>
   );
 }
