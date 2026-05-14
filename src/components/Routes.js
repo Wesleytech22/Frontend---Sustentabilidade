@@ -135,6 +135,7 @@ const RoutesList = () => {
   };
 
   // Importar evento externo
+  // No Routes.js, modifique a função importExternalEvent:
   const importExternalEvent = async (eventId) => {
     try {
       setImporting(true);
@@ -146,6 +147,11 @@ const RoutesList = () => {
         // Limpar busca
         setExternalEvents([]);
         setSearchParams({ keyword: '', city: '', countryCode: 'BR', classification: '' });
+
+        // 👈 REDIRECIONAR PARA TELA DE EVENTOS OU ATUALIZAR
+        if (window.confirm('Evento importado! Deseja ir para a lista de eventos?')) {
+          window.location.href = '/dashboard/events';
+        }
       } else {
         alert(response.data.error || 'Erro ao importar evento');
       }

@@ -1,40 +1,28 @@
 {
-  "name": "frontend",
-  "version": "0.1.0",
+  "name": "ecoroute-frontend",
+  "version": "1.0.0",
   "private": true,
   "dependencies": {
-    "@testing-library/dom": "^10.4.1",
-    "@testing-library/jest-dom": "^6.9.1",
-    "@testing-library/react": "^16.3.2",
-    "@testing-library/user-event": "^13.5.0",
-    "axios": "^1.13.6",
-    "chart.js": "^4.5.1",
+    "axios": "^1.6.0",
+    "chart.js": "^4.4.0",
     "leaflet": "^1.9.4",
     "react": "^18.2.0",
-    "react-chartjs-2": "^5.3.1",
+    "react-chartjs-2": "^5.2.0",
     "react-dom": "^18.2.0",
     "react-leaflet": "^4.2.1",
-    "react-router-dom": "^7.13.1",
-    "react-scripts": "^5.0.1",
-    "react-toastify": "^9.1.3",
-    "socket.io-client": "^4.5.4",
-    "web-vitals": "^2.1.4"
+    "react-router-dom": "^6.20.0",
+    "react-scripts": "5.0.1",
+    "socket.io-client": "^4.5.4"
   },
   "scripts": {
     "start": "react-scripts start",
-    "build": "CI=false DISABLE_ESLINT_PLUGIN=true react-scripts build",
+    "build": "react-scripts build",
     "test": "react-scripts test",
-    "eject": "react-scripts eject",
-    "env:dev": "copy .env.development .env && echo ================================= && echo ✅ Ambiente DESENVOLVIMENTO configurado && echo 📱 Frontend: http://localhost:3001 && echo 🔗 API: http://localhost:3000/api && echo =================================",
-    "env:prod": "copy .env.production .env && echo ================================= && echo ✅ Ambiente PRODUÇÃO configurado && echo 📱 Frontend: build pronto para deploy && echo 🔗 API: https://ecoroute-api.onrender.com/api && echo =================================",
-    "dev:setup": "npm run env:dev && npm start",
-    "prod:setup": "npm run env:prod && npm run build",
-    "current": "echo ================================= && echo 🔍 AMBIENTE ATUAL: && echo -------------------------------- && findstr REACT_APP_ENV .env && findstr REACT_APP_API_URL .env && echo ================================="
+    "eject": "react-scripts eject"
   },
   "eslintConfig": {
     "extends": [
-      "react-app",
-      "react-app/jest"
+      "react-app"
     ]
   },
   "browserslist": {
@@ -48,8 +36,5 @@
       "last 1 firefox version",
       "last 1 safari version"
     ]
-  },
-  "devDependencies": {
-    "postcss-preset-env": "^7.8.3"
   }
 }
