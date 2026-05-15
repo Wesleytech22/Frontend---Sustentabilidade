@@ -45,8 +45,14 @@ const Sidebar = ({ user, onLogout, unreadCount, isConnected }) => {
           <span>Pontos de Coleta</span>
         </NavLink>
 
-        {/* 👈 Única entrada para Rotas - agora com mapa */}
+        {/* Rotas - Lista de rotas com status (PLANNED, IN_PROGRESS, COMPLETED) */}
         <NavLink to="/dashboard/routes" className={({ isActive }) => isActive ? 'active' : ''}>
+          <i className="fas fa-route"></i>
+          <span>Rotas</span>
+        </NavLink>
+
+        {/* Rotas Otimizadas - Mapa e otimização */}
+        <NavLink to="/dashboard/optimized-routes" className={({ isActive }) => isActive ? 'active' : ''}>
           <i className="fas fa-map-marked-alt"></i>
           <span>Rotas Otimizadas</span>
         </NavLink>

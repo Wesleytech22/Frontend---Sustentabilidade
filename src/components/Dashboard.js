@@ -6,7 +6,8 @@ import Sidebar from './Sidebar';
 import NotificationBell from './Notifications/NotificationBell';
 import Home from './Home';
 import CollectionPoints from './CollectionPoints';
-import OptimizedRoutes from './OptimizedRoutes';  // 👈 Importar o componente otimizado
+import RoutesList from './Routes';
+import OptimizedRoutes from './OptimizedRoutes';
 import Impact from './Impact';
 import Chat from './Chat/Chat';
 import Notifications from './Notifications/Notifications';
@@ -34,7 +35,8 @@ const Dashboard = () => {
   const getPageTitle = () => {
     const path = location.pathname;
     if (path.includes('/points')) return 'Pontos de Coleta';
-    if (path.includes('/routes')) return 'Rotas Otimizadas';  // 👈 Mudado para Rotas Otimizadas
+    if (path.includes('/routes')) return 'Rotas';
+    if (path.includes('/optimized-routes')) return 'Rotas Otimizadas com Mapa';
     if (path.includes('/impact')) return 'Impacto Ambiental';
     if (path.includes('/chat')) return 'Chat em Tempo Real';
     if (path.includes('/notifications')) return 'Notificações';
@@ -46,7 +48,8 @@ const Dashboard = () => {
   const getPageIcon = () => {
     const path = location.pathname;
     if (path.includes('/points')) return 'fas fa-map-marker-alt';
-    if (path.includes('/routes')) return 'fas fa-map-marked-alt';  // 👈 Ícone do mapa
+    if (path.includes('/routes')) return 'fas fa-route';
+    if (path.includes('/optimized-routes')) return 'fas fa-map-marked-alt';
     if (path.includes('/impact')) return 'fas fa-leaf';
     if (path.includes('/chat')) return 'fas fa-comments';
     if (path.includes('/notifications')) return 'fas fa-bell';
@@ -116,7 +119,8 @@ const Dashboard = () => {
           <Routes>
             <Route path="/" element={<Home />} />
             <Route path="/points" element={<CollectionPoints />} />
-            <Route path="/routes" element={<OptimizedRoutes />} />  {/* 👈 Agora /routes mostra o mapa */}
+            <Route path="/routes" element={<RoutesList />} />
+            <Route path="/optimized-routes" element={<OptimizedRoutes />} />
             <Route path="/impact" element={<Impact />} />
             <Route path="/chat" element={<Chat />} />
             <Route path="/chat/:room" element={<Chat />} />
