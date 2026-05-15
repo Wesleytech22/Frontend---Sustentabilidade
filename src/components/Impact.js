@@ -31,6 +31,8 @@ const Impact = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [selectedPeriod, setSelectedPeriod] = useState('month');
+  const [selectedPoint, setSelectedPoint] = useState('');
+  const [points, setPoints] = useState([]);
   const [impact, setImpact] = useState({
     treesSaved: 0,
     waterSaved: 0,
@@ -52,20 +54,32 @@ const Impact = () => {
   });
   const [benefitsDetail, setBenefitsDetail] = useState([]);
 
+  // Carregar pontos de coleta para o filtro
+  const loadPoints = async () => {
+    try {
+      const response = await api.get('/points');
+      setPoints(response.data);
+    } catch (error) {
+      console.error('Erro ao carregar pontos:', error);
+    }
+  };
+
   // Carregar dados reais
-  const loadImpactData = async (period) => {
+  const loadImpactData = async () => {
     try {
       setLoading(true);
       setError(null);
 
+      const params = new URLSearchParams();
+      if (selectedPoint) params.append('pointId', selectedPoint);
+
       const [impactRes, evolutionRes, distributionRes, benefitsRes] = await Promise.all([
         api.get('/impact/summary').catch(() => ({ data: null })),
-        api.get(`/impact/evolution?period=${period}`).catch(() => ({ data: null })),
-        api.get('/impact/waste-distribution').catch(() => ({ data: null })),
+        api.get(`/impact/evolution?period=${selectedPeriod}${selectedPoint ? `&pointId=${selectedPoint}` : ''}`).catch(() => ({ data: null })),
+        api.get(`/impact/waste-distribution${selectedPoint ? `?pointId=${selectedPoint}` : ''}`).catch(() => ({ data: null })),
         api.get('/impact/benefits').catch(() => ({ data: null }))
       ]);
 
-      // Impacto principal
       if (impactRes.data) {
         setImpact({
           treesSaved: impactRes.data.treesSaved || 0,
@@ -79,7 +93,6 @@ const Impact = () => {
         });
       }
 
-      // Evolução
       if (evolutionRes.data && evolutionRes.data.labels) {
         setEvolutionData({
           labels: evolutionRes.data.labels,
@@ -88,7 +101,6 @@ const Impact = () => {
         });
       }
 
-      // Distribuição de resíduos
       if (distributionRes.data && distributionRes.data.labels) {
         setWasteDistribution({
           labels: distributionRes.data.labels,
@@ -96,7 +108,6 @@ const Impact = () => {
         });
       }
 
-      // Benefícios detalhados
       if (benefitsRes.data && benefitsRes.data.benefits) {
         setBenefitsDetail(benefitsRes.data.benefits);
       }
@@ -110,10 +121,13 @@ const Impact = () => {
   };
 
   useEffect(() => {
-    loadImpactData(selectedPeriod);
-  }, [selectedPeriod]);
+    loadPoints();
+  }, []);
 
-  // Dados para o gráfico de evolução
+  useEffect(() => {
+    loadImpactData();
+  }, [selectedPeriod, selectedPoint]);
+
   const evolutionChartData = {
     labels: evolutionData.labels,
     datasets: [
@@ -143,7 +157,6 @@ const Impact = () => {
     ]
   };
 
-  // Dados para o gráfico de distribuição de resíduos
   const wasteDistributionData = {
     labels: wasteDistribution.labels,
     datasets: [
@@ -240,7 +253,6 @@ const Impact = () => {
 
   const totalWaste = wasteDistribution.data.reduce((a, b) => a + b, 0);
 
-  // Calcular percentual da meta anual
   const getGoalPercentage = () => {
     const totalActual = evolutionData.actual.reduce((a, b) => a + b, 0);
     const totalGoal = evolutionData.goal.reduce((a, b) => a + b, 0);
@@ -262,10 +274,12 @@ const Impact = () => {
       <div className="error-container">
         <i className="fas fa-exclamation-triangle"></i>
         <p>{error}</p>
-        <button onClick={() => loadImpactData(selectedPeriod)} className="btn-primary">Tentar Novamente</button>
+        <button onClick={() => loadImpactData()} className="btn-primary">Tentar Novamente</button>
       </div>
     );
   }
+
+  const selectedPointName = points.find(p => p._id === selectedPoint)?.name || 'Todos os pontos';
 
   return (
     <div className="impact-container">
@@ -274,32 +288,60 @@ const Impact = () => {
           <h2>Impacto Ambiental</h2>
           <p className="impact-subtitle">Acompanhe o impacto positivo das suas ações</p>
         </div>
-        <div className="period-selector">
-          <button
-            className={`period-btn ${selectedPeriod === 'week' ? 'active' : ''}`}
-            onClick={() => setSelectedPeriod('week')}
-          >
-            <i className="fas fa-calendar-week"></i>
-            Semana
-          </button>
-          <button
-            className={`period-btn ${selectedPeriod === 'month' ? 'active' : ''}`}
-            onClick={() => setSelectedPeriod('month')}
-          >
-            <i className="fas fa-calendar-alt"></i>
-            Mês
-          </button>
-          <button
-            className={`period-btn ${selectedPeriod === 'year' ? 'active' : ''}`}
-            onClick={() => setSelectedPeriod('year')}
-          >
-            <i className="fas fa-calendar"></i>
-            Ano
-          </button>
+        <div className="filters-section" style={{ display: 'flex', gap: '15px', alignItems: 'center', flexWrap: 'wrap' }}>
+          <div className="point-filter" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <i className="fas fa-map-marker-alt" style={{ color: '#4CAF50' }}></i>
+            <select
+              value={selectedPoint}
+              onChange={(e) => setSelectedPoint(e.target.value)}
+              style={{
+                padding: '8px 12px',
+                borderRadius: '8px',
+                border: '1px solid #ddd',
+                backgroundColor: 'white',
+                minWidth: '200px'
+              }}
+            >
+              <option value="">Todos os pontos</option>
+              {points.map(point => (
+                <option key={point._id} value={point._id}>
+                  {point.name} - {point.city}/{point.state}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="period-selector">
+            <button
+              className={`period-btn ${selectedPeriod === 'week' ? 'active' : ''}`}
+              onClick={() => setSelectedPeriod('week')}
+            >
+              <i className="fas fa-calendar-week"></i>
+              Semana
+            </button>
+            <button
+              className={`period-btn ${selectedPeriod === 'month' ? 'active' : ''}`}
+              onClick={() => setSelectedPeriod('month')}
+            >
+              <i className="fas fa-calendar-alt"></i>
+              Mês
+            </button>
+            <button
+              className={`period-btn ${selectedPeriod === 'year' ? 'active' : ''}`}
+              onClick={() => setSelectedPeriod('year')}
+            >
+              <i className="fas fa-calendar"></i>
+              Ano
+            </button>
+          </div>
         </div>
       </div>
 
-      {/* Cards de impacto principal */}
+      {selectedPoint && (
+        <div className="filter-info" style={{ marginBottom: '20px', padding: '10px', background: '#e8f5e9', borderRadius: '8px' }}>
+          <i className="fas fa-info-circle"></i> Mostrando dados para: <strong>{selectedPointName}</strong>
+        </div>
+      )}
+
       <div className="impact-cards-grid">
         <div className="impact-card primary">
           <div className="impact-icon-wrapper">
@@ -342,7 +384,6 @@ const Impact = () => {
         </div>
       </div>
 
-      {/* Métricas secundárias */}
       <div className="metrics-grid">
         <div className="metric-card">
           <div className="metric-icon">
@@ -391,7 +432,6 @@ const Impact = () => {
         </div>
       </div>
 
-      {/* Gráficos */}
       <div className="impact-charts">
         <div className="chart-card">
           <div className="chart-header">
@@ -440,7 +480,6 @@ const Impact = () => {
         </div>
       </div>
 
-      {/* Benefícios detalhados */}
       {benefitsDetail.length > 0 && (
         <div className="benefits-section">
           <h3>
@@ -489,6 +528,13 @@ const Impact = () => {
         .error-container i {
           font-size: 48px;
           margin-bottom: 15px;
+        }
+        .filter-info {
+          animation: fadeIn 0.3s ease;
+        }
+        @keyframes fadeIn {
+          from { opacity: 0; transform: translateY(-10px); }
+          to { opacity: 1; transform: translateY(0); }
         }
       `}</style>
     </div>

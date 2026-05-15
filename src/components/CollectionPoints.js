@@ -1,20 +1,23 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import axios from 'axios';
 
 const CollectionPoints = () => {
   const { api } = useAuth();
   const [points, setPoints] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
-  const [showEditModal, setShowEditModal] = useState(false);  // 👈 ADICIONAR ESTA LINHA
-  const [editingPoint, setEditingPoint] = useState(null);     // 👈 ADICIONAR ESTA LINHA
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editingPoint, setEditingPoint] = useState(null);
   const [filter, setFilter] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
+  const [searchingCep, setSearchingCep] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
     address: '',
     city: '',
     state: '',
+    zipCode: '',
     latitude: '',
     longitude: '',
     wasteTypes: [],
@@ -23,6 +26,61 @@ const CollectionPoints = () => {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+
+  const API_URL = 'http://localhost:3000/api';
+
+  const getAuthToken = () => {
+    const token = localStorage.getItem('token') ||
+      localStorage.getItem('authToken') ||
+      sessionStorage.getItem('token') ||
+      sessionStorage.getItem('authToken');
+    return token;
+  };
+
+  const getAuthHeaders = () => {
+    const token = getAuthToken();
+    return {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      }
+    };
+  };
+
+  // Função para buscar endereço por CEP
+  const searchAddressByCep = async (cep) => {
+    const cleanCep = cep.replace(/\D/g, '');
+    if (cleanCep.length !== 8) return;
+
+    setSearchingCep(true);
+    try {
+      const token = getAuthToken();
+      const response = await axios.get(`${API_URL}/geocode/zipcode/${cleanCep}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      if (response.data.success) {
+        const data = response.data.data;
+        setFormData(prev => ({
+          ...prev,
+          address: data.address || prev.address,
+          city: data.city || prev.city,
+          state: data.state || prev.state,
+          latitude: data.latitude || '',
+          longitude: data.longitude || '',
+          zipCode: cleanCep
+        }));
+        alert('Endereço encontrado! Verifique os dados e confirme.');
+      } else {
+        alert('CEP não encontrado');
+      }
+    } catch (error) {
+      console.error('Erro ao buscar CEP:', error);
+      alert('Erro ao buscar CEP. Verifique o número digitado.');
+    } finally {
+      setSearchingCep(false);
+    }
+  };
 
   useEffect(() => {
     loadPoints();
@@ -60,7 +118,6 @@ const CollectionPoints = () => {
     });
   };
 
-  // Abrir modal de edição
   const handleEdit = (point) => {
     setEditingPoint(point);
     setFormData({
@@ -68,6 +125,7 @@ const CollectionPoints = () => {
       address: point.address || '',
       city: point.city || '',
       state: point.state || '',
+      zipCode: point.zipCode || '',
       latitude: point.latitude || '',
       longitude: point.longitude || '',
       wasteTypes: point.wasteTypes || [],
@@ -76,7 +134,6 @@ const CollectionPoints = () => {
     setShowEditModal(true);
   };
 
-  // Salvar edição
   const handleSaveEdit = async () => {
     setSaving(true);
     setError('');
@@ -92,17 +149,14 @@ const CollectionPoints = () => {
         address: formData.address,
         city: formData.city || '',
         state: formData.state?.toUpperCase() || '',
+        zipCode: formData.zipCode || '',
         wasteTypes: formData.wasteTypes,
         capacity: parseFloat(formData.capacity),
         latitude: formData.latitude ? parseFloat(formData.latitude) : null,
         longitude: formData.longitude ? parseFloat(formData.longitude) : null
       };
 
-      console.log('Enviando atualização:', pointData);
-
       const response = await api.put(`/points/${editingPoint._id}`, pointData);
-
-      console.log('Resposta:', response.data);
 
       setSuccess('Ponto de coleta atualizado com sucesso!');
 
@@ -114,6 +168,7 @@ const CollectionPoints = () => {
           address: '',
           city: '',
           state: '',
+          zipCode: '',
           latitude: '',
           longitude: '',
           wasteTypes: [],
@@ -146,17 +201,14 @@ const CollectionPoints = () => {
         address: formData.address,
         city: formData.city || '',
         state: formData.state?.toUpperCase() || '',
+        zipCode: formData.zipCode || '',
         wasteTypes: formData.wasteTypes,
         capacity: parseFloat(formData.capacity),
         latitude: formData.latitude ? parseFloat(formData.latitude) : null,
         longitude: formData.longitude ? parseFloat(formData.longitude) : null
       };
 
-      console.log('Enviando dados:', pointData);
-
       const response = await api.post('/points', pointData);
-
-      console.log('Resposta:', response.data);
 
       setSuccess('Ponto de coleta criado com sucesso!');
 
@@ -167,6 +219,7 @@ const CollectionPoints = () => {
           address: '',
           city: '',
           state: '',
+          zipCode: '',
           latitude: '',
           longitude: '',
           wasteTypes: [],
@@ -368,6 +421,32 @@ const CollectionPoints = () => {
                     placeholder="Ex: Ecoponto Centro"
                     disabled={saving}
                   />
+                </div>
+
+                <div className="form-group">
+                  <label>CEP (opcional - preenche automaticamente)</label>
+                  <div style={{ display: 'flex', gap: '10px' }}>
+                    <input
+                      type="text"
+                      name="zipCode"
+                      value={formData.zipCode}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        setFormData({ ...formData, zipCode: value });
+                        if (value.replace(/\D/g, '').length === 8) {
+                          searchAddressByCep(value);
+                        }
+                      }}
+                      placeholder="00000-000"
+                      maxLength="9"
+                      disabled={saving || searchingCep}
+                      style={{ flex: 1 }}
+                    />
+                    {searchingCep && <i className="fas fa-spinner fa-spin" style={{ padding: '12px' }}></i>}
+                  </div>
+                  <small style={{ color: '#666', fontSize: '11px' }}>
+                    Digite o CEP e o endereço será preenchido automaticamente
+                  </small>
                 </div>
 
                 <div className="form-group">
