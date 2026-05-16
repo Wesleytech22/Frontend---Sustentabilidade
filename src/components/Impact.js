@@ -54,7 +54,6 @@ const Impact = () => {
   });
   const [benefitsDetail, setBenefitsDetail] = useState([]);
 
-  // Carregar pontos de coleta para o filtro
   const loadPoints = async () => {
     try {
       const response = await api.get('/points');
@@ -64,16 +63,17 @@ const Impact = () => {
     }
   };
 
-  // Carregar dados reais
   const loadImpactData = async () => {
     try {
       setLoading(true);
       setError(null);
 
-      let summaryUrl = '/impact/summary';
-      let evolutionUrl = '/impact/evolution';
-      let distributionUrl = '/impact/waste-distribution';
-      let benefitsUrl = '/impact/benefits';
+      const timestamp = new Date().getTime();
+
+      let summaryUrl = `/impact/summary?_t=${timestamp}`;
+      let evolutionUrl = `/impact/evolution?_t=${timestamp}`;
+      let distributionUrl = `/impact/waste-distribution?_t=${timestamp}`;
+      let benefitsUrl = `/impact/benefits?_t=${timestamp}`;
 
       const params = new URLSearchParams();
 
@@ -87,10 +87,10 @@ const Impact = () => {
 
       const queryString = params.toString();
       if (queryString) {
-        summaryUrl += `?${queryString}`;
-        evolutionUrl += `?${queryString}`;
-        distributionUrl += `?${queryString}`;
-        benefitsUrl += `?${queryString}`;
+        summaryUrl += `&${queryString}`;
+        evolutionUrl += `&${queryString}`;
+        distributionUrl += `&${queryString}`;
+        benefitsUrl += `&${queryString}`;
       }
 
       const [impactRes, evolutionRes, distributionRes, benefitsRes] = await Promise.all([
@@ -113,7 +113,7 @@ const Impact = () => {
         });
       }
 
-      if (evolutionRes.data && evolutionRes.data.labels) {
+      if (evolutionRes.data && evolutionRes.data.labels && evolutionRes.data.labels.length > 0) {
         setEvolutionData({
           labels: evolutionRes.data.labels,
           actual: evolutionRes.data.actual,
@@ -314,13 +314,6 @@ const Impact = () => {
     );
   }
 
-  const selectedPointName = points.find(p => p._id === selectedPoint)?.name || 'Todos os pontos';
-  const formatDate = (dateString) => {
-    if (!dateString) return '';
-    const [year, month, day] = dateString.split('-');
-    return `${day}/${month}/${year}`;
-  };
-
   return (
     <div className="impact-container" style={{ padding: '20px' }}>
       <div className="impact-header" style={{ marginBottom: '25px' }}>
@@ -330,7 +323,7 @@ const Impact = () => {
         </div>
       </div>
 
-      {/* Filtros lado a lado */}
+      {/* Filtros */}
       <div className="filters-section" style={{
         display: 'flex',
         gap: '15px',
@@ -341,7 +334,6 @@ const Impact = () => {
         background: '#f8f9fa',
         borderRadius: '12px'
       }}>
-        {/* Filtro por ponto de coleta */}
         <div className="point-filter" style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1 }}>
           <i className="fas fa-map-marker-alt" style={{ color: '#4CAF50' }}></i>
           <select
@@ -366,7 +358,6 @@ const Impact = () => {
           </select>
         </div>
 
-        {/* Calendário para selecionar data */}
         <div className="date-filter" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           <i className="fas fa-calendar-alt" style={{ color: '#4CAF50', fontSize: '18px' }}></i>
           <input
@@ -386,15 +377,7 @@ const Impact = () => {
         </div>
       </div>
 
-      {/* Informação do filtro ativo (apenas ponto) */}
-      {selectedPoint && (
-        <div style={{ marginBottom: '20px', padding: '8px 12px', background: '#e3f2fd', borderRadius: '8px', display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
-          <i className="fas fa-filter" style={{ color: '#2196F3', fontSize: '12px' }}></i>
-          <span style={{ fontSize: '13px' }}>Filtrando por: <strong>{selectedPointName}</strong></span>
-        </div>
-      )}
-
-      {/* Cards de impacto principal */}
+      {/* Cards de impacto */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '20px', marginBottom: '30px' }}>
         <div style={{ background: 'linear-gradient(135deg, #4CAF50, #2E7D32)', padding: '20px', borderRadius: '12px', color: 'white' }}>
           <i className="fas fa-tree" style={{ fontSize: '32px', opacity: 0.8 }}></i>
@@ -444,21 +427,18 @@ const Impact = () => {
           <i className="fas fa-industry" style={{ fontSize: '24px', color: '#2196F3' }}></i>
           <div style={{ fontSize: '12px', color: '#666', marginTop: '5px' }}>Redução de CO₂</div>
           <div style={{ fontSize: '24px', fontWeight: 'bold' }}>{impact.co2Reduction.toLocaleString()} kg</div>
-          <div style={{ fontSize: '11px', color: '#999' }}>Equivalente a {Math.round(impact.co2Reduction / 20)} carros/ano</div>
         </div>
 
         <div style={{ background: '#f5f5f5', padding: '15px', borderRadius: '8px', textAlign: 'center' }}>
           <i className="fas fa-gas-pump" style={{ fontSize: '24px', color: '#FF9800' }}></i>
           <div style={{ fontSize: '12px', color: '#666', marginTop: '5px' }}>Combustível Economizado</div>
           <div style={{ fontSize: '24px', fontWeight: 'bold' }}>{impact.fuelSaved.toLocaleString()} L</div>
-          <div style={{ fontSize: '11px', color: '#999' }}>Rotas otimizadas</div>
         </div>
 
         <div style={{ background: '#f5f5f5', padding: '15px', borderRadius: '8px', textAlign: 'center' }}>
           <i className="fas fa-trash-alt" style={{ fontSize: '24px', color: '#9C27B0' }}></i>
           <div style={{ fontSize: '12px', color: '#666', marginTop: '5px' }}>Resíduos Desviados</div>
           <div style={{ fontSize: '24px', fontWeight: 'bold' }}>{impact.wasteDiverted.toLocaleString()} kg</div>
-          <div style={{ fontSize: '11px', color: '#999' }}>De aterros sanitários</div>
         </div>
       </div>
 
@@ -470,7 +450,7 @@ const Impact = () => {
             <h3 style={{ margin: 0 }}>Evolução da Redução de CO₂</h3>
           </div>
           <div style={{ height: '350px' }}>
-            {evolutionData.actual.length > 0 ? (
+            {evolutionData.actual.length > 0 && evolutionData.actual.some(v => v > 0) ? (
               <Line data={evolutionChartData} options={lineOptions} />
             ) : (
               <div style={{ textAlign: 'center', padding: '60px', color: '#999' }}>
