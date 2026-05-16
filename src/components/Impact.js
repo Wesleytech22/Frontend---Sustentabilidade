@@ -70,7 +70,6 @@ const Impact = () => {
       setLoading(true);
       setError(null);
 
-      // Construir URL com parâmetros
       let summaryUrl = '/impact/summary';
       let evolutionUrl = '/impact/evolution';
       let distributionUrl = '/impact/waste-distribution';
@@ -78,12 +77,10 @@ const Impact = () => {
 
       const params = new URLSearchParams();
 
-      // Adicionar filtro de ponto
       if (selectedPoint) {
         params.append('pointId', selectedPoint);
       }
 
-      // Adicionar filtro de data
       if (selectedDate) {
         params.append('date', selectedDate);
       }
@@ -96,11 +93,6 @@ const Impact = () => {
         benefitsUrl += `?${queryString}`;
       }
 
-      console.log('🔍 Buscando dados de impacto...');
-      console.log('  summaryUrl:', summaryUrl);
-      console.log('  selectedDate:', selectedDate);
-      console.log('  selectedPoint:', selectedPoint);
-
       const [impactRes, evolutionRes, distributionRes, benefitsRes] = await Promise.all([
         api.get(summaryUrl),
         api.get(evolutionUrl),
@@ -108,13 +100,6 @@ const Impact = () => {
         api.get(benefitsUrl)
       ]);
 
-      console.log('📊 Dados recebidos:');
-      console.log('  impact:', impactRes.data);
-      console.log('  evolution:', evolutionRes.data);
-      console.log('  distribution:', distributionRes.data);
-      console.log('  benefits:', benefitsRes.data);
-
-      // Atualizar impact summary
       if (impactRes.data) {
         setImpact({
           treesSaved: impactRes.data.treesSaved || 0,
@@ -128,25 +113,20 @@ const Impact = () => {
         });
       }
 
-      // Atualizar evolution
       if (evolutionRes.data && evolutionRes.data.labels) {
         setEvolutionData({
           labels: evolutionRes.data.labels,
           actual: evolutionRes.data.actual,
           goal: evolutionRes.data.goal
         });
-      } else {
-        // Se não tem dados de evolução, mostrar dados atuais como ponto único
-        if (impactRes.data && impactRes.data.carbonSaved > 0) {
-          setEvolutionData({
-            labels: [selectedDate || 'Hoje'],
-            actual: [impactRes.data.carbonSaved],
-            goal: [Math.round(impactRes.data.carbonSaved * 1.2)]
-          });
-        }
+      } else if (impactRes.data && impactRes.data.carbonSaved > 0) {
+        setEvolutionData({
+          labels: [selectedDate || 'Hoje'],
+          actual: [impactRes.data.carbonSaved],
+          goal: [Math.round(impactRes.data.carbonSaved * 1.2)]
+        });
       }
 
-      // Atualizar waste distribution
       if (distributionRes.data && distributionRes.data.labels) {
         setWasteDistribution({
           labels: distributionRes.data.labels,
@@ -154,19 +134,18 @@ const Impact = () => {
         });
       }
 
-      // Atualizar benefits
       if (benefitsRes.data && benefitsRes.data.benefits) {
         setBenefitsDetail(benefitsRes.data.benefits);
       }
 
     } catch (err) {
-      console.error('❌ Erro ao carregar dados de impacto:', err);
+      console.error('Erro ao carregar dados de impacto:', err);
       setError('Erro ao carregar dados de impacto. Tente novamente mais tarde.');
     } finally {
       setLoading(false);
     }
   };
-  // Definir data padrão como hoje
+
   useEffect(() => {
     const today = new Date();
     const formattedDate = today.toISOString().split('T')[0];
@@ -182,13 +161,6 @@ const Impact = () => {
       loadImpactData();
     }
   }, [selectedDate, selectedPoint]);
-
-  // Limpar filtro de data
-  const handleClearDate = () => {
-    const today = new Date();
-    const formattedDate = today.toISOString().split('T')[0];
-    setSelectedDate(formattedDate);
-  };
 
   const evolutionChartData = {
     labels: evolutionData.labels,
@@ -323,12 +295,6 @@ const Impact = () => {
     return Math.round((totalActual / totalGoal) * 100);
   };
 
-  const formatDate = (dateString) => {
-    if (!dateString) return '';
-    const [year, month, day] = dateString.split('-');
-    return `${day}/${month}/${year}`;
-  };
-
   if (loading) {
     return (
       <div className="loading-container">
@@ -349,6 +315,11 @@ const Impact = () => {
   }
 
   const selectedPointName = points.find(p => p._id === selectedPoint)?.name || 'Todos os pontos';
+  const formatDate = (dateString) => {
+    if (!dateString) return '';
+    const [year, month, day] = dateString.split('-');
+    return `${day}/${month}/${year}`;
+  };
 
   return (
     <div className="impact-container" style={{ padding: '20px' }}>
@@ -357,80 +328,69 @@ const Impact = () => {
           <h2 style={{ margin: '0 0 8px 0' }}>Impacto Ambiental</h2>
           <p className="impact-subtitle" style={{ color: '#666', margin: 0 }}>Acompanhe o impacto positivo das suas ações por data de coleta</p>
         </div>
+      </div>
 
-        <div className="filters-section" style={{ display: 'flex', gap: '15px', alignItems: 'center', flexWrap: 'wrap', marginTop: '15px' }}>
-          {/* Filtro por ponto de coleta */}
-          <div className="point-filter" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <i className="fas fa-map-marker-alt" style={{ color: '#4CAF50' }}></i>
-            <select
-              value={selectedPoint}
-              onChange={(e) => setSelectedPoint(e.target.value)}
-              style={{
-                padding: '10px 15px',
-                borderRadius: '8px',
-                border: '1px solid #ddd',
-                backgroundColor: 'white',
-                minWidth: '220px',
-                cursor: 'pointer'
-              }}
-            >
-              <option value="">Todos os pontos</option>
-              {points.map(point => (
-                <option key={point._id} value={point._id}>
-                  {point.name} - {point.city}/{point.state}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* Calendário para selecionar data */}
-          <div className="date-filter" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <i className="fas fa-calendar-alt" style={{ color: '#4CAF50', fontSize: '18px' }}></i>
-            <input
-              type="date"
-              value={selectedDate}
-              onChange={(e) => setSelectedDate(e.target.value)}
-              style={{
-                padding: '10px 15px',
-                borderRadius: '8px',
-                border: '1px solid #ddd',
-                backgroundColor: 'white',
-                fontSize: '14px',
-                cursor: 'pointer',
-                minWidth: '180px'
-              }}
-            />
-            <button
-              onClick={handleClearDate}
-              style={{
-                padding: '10px 15px',
-                borderRadius: '8px',
-                border: '1px solid #ddd',
-                backgroundColor: '#f5f5f5',
-                cursor: 'pointer',
-                fontSize: '14px',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px'
-              }}
-              title="Voltar para hoje"
-            >
-              <i className="fas fa-sync-alt"></i> Hoje
-            </button>
-          </div>
+      {/* Filtros lado a lado */}
+      <div className="filters-section" style={{
+        display: 'flex',
+        gap: '15px',
+        alignItems: 'center',
+        flexWrap: 'wrap',
+        marginBottom: '25px',
+        padding: '15px',
+        background: '#f8f9fa',
+        borderRadius: '12px'
+      }}>
+        {/* Filtro por ponto de coleta */}
+        <div className="point-filter" style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1 }}>
+          <i className="fas fa-map-marker-alt" style={{ color: '#4CAF50' }}></i>
+          <select
+            value={selectedPoint}
+            onChange={(e) => setSelectedPoint(e.target.value)}
+            style={{
+              padding: '10px 15px',
+              borderRadius: '8px',
+              border: '1px solid #ddd',
+              backgroundColor: 'white',
+              minWidth: '220px',
+              cursor: 'pointer',
+              flex: 1
+            }}
+          >
+            <option value="">Todos os pontos</option>
+            {points.map(point => (
+              <option key={point._id} value={point._id}>
+                {point.name} - {point.city}/{point.state}
+              </option>
+            ))}
+          </select>
         </div>
 
-        {/* Informação da data selecionada */}
-        <div style={{ marginTop: '15px', padding: '10px 15px', background: '#e8f5e9', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <i className="fas fa-calendar-check" style={{ color: '#4CAF50' }}></i>
-          <span>Mostrando dados das coletas realizadas em: <strong>{formatDate(selectedDate)}</strong></span>
+        {/* Calendário para selecionar data */}
+        <div className="date-filter" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <i className="fas fa-calendar-alt" style={{ color: '#4CAF50', fontSize: '18px' }}></i>
+          <input
+            type="date"
+            value={selectedDate}
+            onChange={(e) => setSelectedDate(e.target.value)}
+            style={{
+              padding: '10px 15px',
+              borderRadius: '8px',
+              border: '1px solid #ddd',
+              backgroundColor: 'white',
+              fontSize: '14px',
+              cursor: 'pointer',
+              minWidth: '180px'
+            }}
+          />
         </div>
       </div>
 
+      {/* Informação do filtro ativo (apenas ponto) */}
       {selectedPoint && (
-        <div className="filter-info" style={{ marginBottom: '20px', padding: '10px 15px', background: '#e3f2fd', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <i className="fas fa-info-circle" style={{ color: '#2196F3' }}></i>
-          <span>Filtrando por ponto: <strong>{selectedPointName}</strong></span>
+        <div style={{ marginBottom: '20px', padding: '8px 12px', background: '#e3f2fd', borderRadius: '8px', display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+          <i className="fas fa-filter" style={{ color: '#2196F3', fontSize: '12px' }}></i>
+          <span style={{ fontSize: '13px' }}>Filtrando por: <strong>{selectedPointName}</strong></span>
         </div>
       )}
 
