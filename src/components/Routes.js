@@ -13,9 +13,10 @@ const RoutesList = () => {
   const [routeDetails, setRouteDetails] = useState(null);
 
   // Estados para vinculação de rotas
+  // Estados para vinculação de rotas
   const [showLinkModal, setShowLinkModal] = useState(false);
-  const [availablePoints, setAvailablePoints] = useState([]);
-  const [selectedPointIds, setSelectedPointIds] = useState([]);
+  const [availableRoutes, setAvailableRoutes] = useState([]);  // Mudou de availablePoints
+  const [selectedRouteIds, setSelectedRouteIds] = useState([]); // Mudou de selectedPointIds
   const [newRouteName, setNewRouteName] = useState('');
   const [linking, setLinking] = useState(false);
 
@@ -90,63 +91,120 @@ const RoutesList = () => {
     }
   };
 
-  // Carregar pontos disponíveis para vinculação
-  const loadAvailablePoints = async () => {
+  // Carregar rotas disponíveis para vinculação (apenas rotas PLANEJADAS)
+  const loadAvailableRoutes = async () => {
     try {
-      const token = getAuthToken();
-      const response = await axios.get(`${API_URL}/points`, getAuthHeaders());
-      const pointsWithCoords = response.data.filter(p => p.latitude && p.longitude);
-      setAvailablePoints(pointsWithCoords);
+      const response = await axios.get(`${API_URL}/routes`, getAuthHeaders());
+
+      // Filtrar apenas rotas PLANEJADAS (não concluídas, não canceladas, não em andamento)
+      const plannedRoutes = response.data.filter(route =>
+        route.status === 'PLANNED'
+      );
+
+      console.log('📋 Rotas planejadas disponíveis:', plannedRoutes.length);
+      setAvailableRoutes(plannedRoutes);
+
+      if (plannedRoutes.length === 0) {
+        alert('Nenhuma rota planejada disponível para vincular.');
+      }
     } catch (error) {
-      console.error('Erro ao carregar pontos:', error);
+      console.error('Erro ao carregar rotas:', error);
+      alert('Erro ao carregar rotas: ' + (error.response?.data?.error || error.message));
     }
   };
 
-  // Vincular pontos selecionados
-  const handleLinkPoints = async () => {
-    if (selectedPointIds.length < 2) {
-      alert('Selecione pelo menos 2 pontos de coleta');
+  // Vincular rotas selecionadas em uma nova rota combinada
+  const handleLinkRoutes = async () => {
+    if (selectedRouteIds.length < 2) {
+      alert('Selecione pelo menos 2 rotas para vincular');
       return;
     }
 
     setLinking(true);
     try {
+      // Buscar todas as rotas selecionadas
+      const routesToCombine = availableRoutes.filter(route =>
+        selectedRouteIds.includes(route._id)
+      );
+
+      // Coletar todos os pontos das rotas selecionadas
+      const allPoints = [];
+      for (const route of routesToCombine) {
+        // Buscar detalhes da rota para pegar os pontos completos
+        const routeDetails = await axios.get(`${API_URL}/routes/${route._id}`, getAuthHeaders());
+        const points = routeDetails.data.points || [];
+        points.forEach(point => {
+          if (point.pointId) {
+            allPoints.push(point.pointId);
+          }
+        });
+      }
+
+      // Remover duplicatas (mesmo ponto em rotas diferentes)
+      const uniquePoints = [];
+      const pointIds = new Set();
+      for (const point of allPoints) {
+        if (!pointIds.has(point._id)) {
+          pointIds.add(point._id);
+          uniquePoints.push(point);
+        }
+      }
+
+      if (uniquePoints.length < 2) {
+        alert('As rotas selecionadas precisam ter no mínimo 2 pontos únicos no total');
+        setLinking(false);
+        return;
+      }
+
+      // Vincular os pontos únicos
       const response = await axios.post(`${API_URL}/routes/link-points`, {
-        pointIds: selectedPointIds,
-        routeName: newRouteName || undefined
+        pointIds: uniquePoints.map(p => p._id),
+        routeName: newRouteName || `Rota Combinada - ${routesToCombine.map(r => r.name).join(' + ')}`
       }, getAuthHeaders());
 
       alert(response.data.message);
+
+      // Opcional: perguntar se quer deletar as rotas originais
+      const deleteOriginal = window.confirm('Deseja deletar as rotas originais após vincular?');
+      if (deleteOriginal) {
+        for (const route of routesToCombine) {
+          await axios.delete(`${API_URL}/routes/${route._id}`, getAuthHeaders());
+        }
+        alert('Rotas originais removidas!');
+      }
+
       setShowLinkModal(false);
-      setSelectedPointIds([]);
+      setSelectedRouteIds([]);
       setNewRouteName('');
-      fetchRoutes();
+      fetchRoutes(); // Recarregar lista de rotas
+
     } catch (error) {
-      console.error('Erro ao vincular:', error);
-      alert(error.response?.data?.error || 'Erro ao vincular pontos');
+      console.error('Erro ao vincular rotas:', error);
+      alert(error.response?.data?.error || 'Erro ao vincular rotas');
     } finally {
       setLinking(false);
     }
   };
-
-  // Toggle seleção de ponto
-  const togglePointSelection = (pointId) => {
-    setSelectedPointIds(prev =>
-      prev.includes(pointId)
-        ? prev.filter(id => id !== pointId)
-        : [...prev, pointId]
+  // Toggle seleção de rota
+  const toggleRouteSelection = (routeId) => {
+    setSelectedRouteIds(prev =>
+      prev.includes(routeId)
+        ? prev.filter(id => id !== routeId)
+        : [...prev, routeId]
     );
   };
+
+  const TEST_MODE = true;
 
   // Calcular status baseado na data/hora da coleta
   const calculateRouteStatus = (route) => {
     const now = new Date();
     const routeDate = new Date(route.date);
-    const routeTime = new Date(routeDate);
-    routeTime.setHours(8, 0, 0, 0);
-    const timeDiff = routeTime - now;
-    const hoursDiff = timeDiff / (1000 * 60 * 60);
 
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const routeDay = new Date(routeDate.getFullYear(), routeDate.getMonth(), routeDate.getDate());
+
+    // Status baseado no status do backend primeiro
     if (route.status === 'COMPLETED') {
       return { text: 'Concluído', color: '#4CAF50', icon: 'fas fa-check-circle' };
     }
@@ -156,18 +214,26 @@ const RoutesList = () => {
     if (route.status === 'IN_PROGRESS') {
       return { text: 'Em Andamento', color: '#2196F3', icon: 'fas fa-spinner fa-pulse' };
     }
-    if (hoursDiff <= 0 && hoursDiff > -24) {
-      return { text: 'Em Andamento', color: '#2196F3', icon: 'fas fa-spinner fa-pulse' };
-    }
-    if (hoursDiff < -24) {
-      return { text: 'Atrasado', color: '#ff9800', icon: 'fas fa-exclamation-triangle' };
-    }
-    if (hoursDiff <= 24 && hoursDiff > 0) {
+
+    // MODO DE TESTE: força status "Hoje" para aparecer o botão
+    if (TEST_MODE && route.status !== 'COMPLETED' && route.status !== 'CANCELLED') {
       return { text: 'Hoje', color: '#9C27B0', icon: 'fas fa-calendar-day' };
     }
-    if (hoursDiff <= 48 && hoursDiff > 24) {
+
+    // Calcular diferença em dias (lógica original)
+    const diffDays = Math.ceil((routeDay - today) / (1000 * 60 * 60 * 24));
+
+    // Status baseado na data
+    if (diffDays < 0) {
+      return { text: 'Atrasado', color: '#ff9800', icon: 'fas fa-exclamation-triangle' };
+    }
+    if (diffDays === 0) {
+      return { text: 'Hoje', color: '#9C27B0', icon: 'fas fa-calendar-day' };
+    }
+    if (diffDays === 1) {
       return { text: 'Amanhã', color: '#00BCD4', icon: 'fas fa-calendar-alt' };
     }
+
     return { text: 'Agendado', color: '#757575', icon: 'fas fa-calendar-week' };
   };
 
@@ -263,7 +329,7 @@ const RoutesList = () => {
         <button
           className="btn-link"
           onClick={() => {
-            loadAvailablePoints();
+            loadAvailableRoutes();
             setShowLinkModal(true);
           }}
         >
@@ -369,7 +435,8 @@ const RoutesList = () => {
                     <i className="fas fa-eye"></i> Ver Detalhes
                   </button>
 
-                  {!isCompleted && !isCancelled && isPlanned && isCollectionDay && (
+                  {/* Botão Iniciar Coleta - aparece para rotas PLANEJADAS ou AGENDADAS com data Hoje/Amanhã */}
+                  {(route.status === 'PLANNED' || statusInfo?.text === 'Agendado') && (statusInfo?.text === 'Hoje' || statusInfo?.text === 'Amanhã') && (
                     <button
                       className="btn-start"
                       onClick={() => updateRouteStatus(route._id, 'IN_PROGRESS')}
@@ -378,7 +445,8 @@ const RoutesList = () => {
                     </button>
                   )}
 
-                  {!isCompleted && !isCancelled && isInProgress && (
+                  {/* Botão Concluir Coleta - aparece para rotas EM ANDAMENTO */}
+                  {route.status === 'IN_PROGRESS' && (
                     <button
                       className="btn-complete"
                       onClick={() => updateRouteStatus(route._id, 'COMPLETED')}
@@ -387,7 +455,8 @@ const RoutesList = () => {
                     </button>
                   )}
 
-                  {!isCompleted && !isCancelled && (
+                  {/* Botão Cancelar - aparece para rotas não concluídas e não canceladas */}
+                  {route.status !== 'COMPLETED' && route.status !== 'CANCELLED' && (
                     <button
                       className="btn-cancel"
                       onClick={() => updateRouteStatus(route._id, 'CANCELLED')}
@@ -402,82 +471,140 @@ const RoutesList = () => {
         </div>
       )}
 
-      {/* MODAL DE VINCULAÇÃO */}
+      {/* MODAL DE VINCULAÇÃO DE ROTAS - VERSÃO MELHORADA */}
       {showLinkModal && (
         <div className="modal-overlay" onClick={() => setShowLinkModal(false)}>
-          <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: '600px' }}>
+          <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: '750px' }}>
             <div className="modal-header">
-              <h2><i className="fas fa-link"></i> Vincular Pontos de Coleta</h2>
+              <div className="modal-title">
+                <i className="fas fa-link" style={{ color: '#9C27B0', fontSize: '24px' }}></i>
+                <h2>Vincular Rotas de Coleta</h2>
+              </div>
               <button className="close" onClick={() => setShowLinkModal(false)}>&times;</button>
             </div>
+
             <div className="modal-body">
-              <div className="form-group">
-                <label>Nome da Rota (opcional)</label>
+              {/* Campo para nome da rota */}
+              <div className="form-group route-name-group">
+                <label className="form-label">
+                  <i className="fas fa-pen"></i> Nome da Nova Rota
+                  <span className="optional">(opcional)</span>
+                </label>
                 <input
                   type="text"
+                  className="route-name-input"
                   value={newRouteName}
                   onChange={(e) => setNewRouteName(e.target.value)}
-                  placeholder="Ex: Rota Zona Sul"
+                  placeholder="Ex: Rota Combinada Zona Sul"
                 />
               </div>
 
+              {/* Lista de rotas disponíveis */}
               <div className="form-group">
-                <label>Selecione os pontos para vincular (mínimo 2)</label>
-                <div className="points-selection-list" style={{ maxHeight: '300px', overflowY: 'auto', border: '1px solid #e0e0e0', borderRadius: '8px', padding: '8px' }}>
-                  {availablePoints.map(point => (
-                    <label key={point._id} style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '10px',
-                      padding: '10px',
-                      margin: '5px 0',
-                      background: selectedPointIds.includes(point._id) ? '#e8f5e9' : '#f5f5f5',
-                      borderRadius: '8px',
-                      cursor: 'pointer'
-                    }}>
-                      <input
-                        type="checkbox"
-                        checked={selectedPointIds.includes(point._id)}
-                        onChange={() => togglePointSelection(point._id)}
-                      />
-                      <div style={{ flex: 1 }}>
-                        <strong>{point.name}</strong>
-                        <br />
-                        <small>{point.address}, {point.city} - {point.state}</small>
-                        {point.currentVolume > 0 && (
-                          <span style={{ marginLeft: '8px', color: '#4CAF50' }}>
-                            📦 {point.currentVolume} kg
-                          </span>
-                        )}
-                      </div>
-                      {point.latitude && point.longitude && (
-                        <i className="fas fa-map-marker-alt" style={{ color: '#4CAF50' }}></i>
-                      )}
-                    </label>
-                  ))}
-                </div>
-                {availablePoints.length === 0 && (
-                  <p style={{ textAlign: 'center', color: '#999', padding: '20px' }}>
-                    Nenhum ponto de coleta com coordenadas cadastrado.
-                  </p>
+                <label className="form-label">
+                  <i className="fas fa-list"></i> Selecione as rotas para vincular
+                  <span className="required">(mínimo 2)</span>
+                </label>
+
+                {availableRoutes.length === 0 ? (
+                  <div className="empty-routes">
+                    <i className="fas fa-calendar-times"></i>
+                    <p>Nenhuma rota planejada disponível</p>
+                    <small>Crie novas rotas para poder vinculá-las</small>
+                  </div>
+                ) : (
+                  <div className="routes-list-container">
+                    {availableRoutes.map(route => {
+                      const pontosCount = route.points?.length || 0;
+                      const isSelected = selectedRouteIds.includes(route._id);
+                      const totalWaste = route.totalWaste || 0;
+                      const routeDate = new Date(route.date);
+                      const isToday = routeDate.toDateString() === new Date().toDateString();
+
+                      return (
+                        <div
+                          key={route._id}
+                          className={`route-item ${isSelected ? 'selected' : ''}`}
+                          onClick={() => toggleRouteSelection(route._id)}
+                        >
+                          <div className="route-checkbox">
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={() => toggleRouteSelection(route._id)}
+                              onClick={(e) => e.stopPropagation()}
+                            />
+                            {isSelected && <i className="fas fa-check-circle check-icon"></i>}
+                          </div>
+
+                          <div className="route-content">
+                            <div className="route-name-section">
+                              <h4>{route.name}</h4>
+                              <span className={`date-badge ${isToday ? 'today' : ''}`}>
+                                <i className="fas fa-calendar-alt"></i>
+                                {routeDate.toLocaleDateString('pt-BR')}
+                              </span>
+                            </div>
+
+                            <div className="route-stats">
+                              <div className="stat">
+                                <i className="fas fa-map-marker-alt"></i>
+                                <span>{pontosCount} {pontosCount === 1 ? 'ponto' : 'pontos'}</span>
+                              </div>
+                              <div className="stat">
+                                <i className="fas fa-weight-hanging"></i>
+                                <span>{totalWaste.toLocaleString()} kg</span>
+                              </div>
+                              <div className="stat">
+                                <i className="fas fa-clock"></i>
+                                <span>{pontosCount} hora{pontosCount > 1 ? 's' : ''}</span>
+                              </div>
+                            </div>
+
+                            <div className="route-footer-info">
+                              <span className="status-agendada">
+                                <i className="fas fa-calendar-check"></i> Agendada para {routeDate.toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: 'short' })}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
                 )}
               </div>
 
-              <div className="selected-info" style={{ marginTop: '15px', padding: '10px', background: '#f5f5f5', borderRadius: '8px', textAlign: 'center' }}>
-                <strong>{selectedPointIds.length} ponto(s) selecionado(s)</strong>
-                {selectedPointIds.length >= 2 && (
-                  <span style={{ color: '#4CAF50', marginLeft: '10px' }}>
-                    <i className="fas fa-check"></i> Pode criar rota
-                  </span>
+              {/* Resumo da seleção */}
+              <div className={`selection-summary ${selectedRouteIds.length >= 2 ? 'ready' : 'pending'}`}>
+                <div className="summary-left">
+                  <i className={`fas ${selectedRouteIds.length >= 2 ? 'fa-check-circle' : 'fa-info-circle'}`}></i>
+                  <div>
+                    <strong>{selectedRouteIds.length} rota(s) selecionada(s)</strong>
+                    {selectedRouteIds.length < 2 && (
+                      <small>Selecione pelo menos 2 rotas para vincular</small>
+                    )}
+                    {selectedRouteIds.length >= 2 && (
+                      <small className="ready-text">Pronto para vincular as rotas selecionadas</small>
+                    )}
+                  </div>
+                </div>
+                {selectedRouteIds.length >= 2 && (
+                  <div className="summary-right">
+                    <i className="fas fa-arrow-right"></i>
+                    <span>Combinar</span>
+                  </div>
                 )}
               </div>
             </div>
+
             <div className="modal-footer">
-              <button className="btn-secondary" onClick={() => setShowLinkModal(false)}>Cancelar</button>
+              <button className="btn-cancelar" onClick={() => setShowLinkModal(false)}>
+                <i className="fas fa-times"></i> Cancelar
+              </button>
               <button
-                className="btn-primary"
-                onClick={handleLinkPoints}
-                disabled={selectedPointIds.length < 2 || linking}
+                className="btn-vincular"
+                onClick={handleLinkRoutes}
+                disabled={selectedRouteIds.length < 2 || linking}
               >
                 {linking ? (
                   <><i className="fas fa-spinner fa-spin"></i> Vinculando...</>

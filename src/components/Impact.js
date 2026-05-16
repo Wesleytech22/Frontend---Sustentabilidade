@@ -30,12 +30,9 @@ const Impact = () => {
   const { api } = useAuth();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [selectedPeriod, setSelectedPeriod] = useState('month');
   const [selectedPoint, setSelectedPoint] = useState('');
   const [points, setPoints] = useState([]);
-  const [customStartDate, setCustomStartDate] = useState('');
-  const [customEndDate, setCustomEndDate] = useState('');
-  const [showCustomDate, setShowCustomDate] = useState(false);
+  const [selectedDate, setSelectedDate] = useState('');
   const [impact, setImpact] = useState({
     treesSaved: 0,
     waterSaved: 0,
@@ -75,29 +72,49 @@ const Impact = () => {
 
       // Construir URL com parâmetros
       let summaryUrl = '/impact/summary';
-      let evolutionUrl = `/impact/evolution?period=${selectedPeriod}`;
+      let evolutionUrl = '/impact/evolution';
       let distributionUrl = '/impact/waste-distribution';
       let benefitsUrl = '/impact/benefits';
 
+      const params = new URLSearchParams();
+
       // Adicionar filtro de ponto
       if (selectedPoint) {
-        summaryUrl += `?pointId=${selectedPoint}`;
-        evolutionUrl += `&pointId=${selectedPoint}`;
-        distributionUrl += `?pointId=${selectedPoint}`;
+        params.append('pointId', selectedPoint);
       }
 
-      // Adicionar filtro de data personalizada
-      if (showCustomDate && customStartDate && customEndDate) {
-        evolutionUrl += `&startDate=${customStartDate}&endDate=${customEndDate}`;
+      // Adicionar filtro de data
+      if (selectedDate) {
+        params.append('date', selectedDate);
       }
+
+      const queryString = params.toString();
+      if (queryString) {
+        summaryUrl += `?${queryString}`;
+        evolutionUrl += `?${queryString}`;
+        distributionUrl += `?${queryString}`;
+        benefitsUrl += `?${queryString}`;
+      }
+
+      console.log('🔍 Buscando dados de impacto...');
+      console.log('  summaryUrl:', summaryUrl);
+      console.log('  selectedDate:', selectedDate);
+      console.log('  selectedPoint:', selectedPoint);
 
       const [impactRes, evolutionRes, distributionRes, benefitsRes] = await Promise.all([
-        api.get(summaryUrl).catch(() => ({ data: null })),
-        api.get(evolutionUrl).catch(() => ({ data: null })),
-        api.get(distributionUrl).catch(() => ({ data: null })),
-        api.get(benefitsUrl).catch(() => ({ data: null }))
+        api.get(summaryUrl),
+        api.get(evolutionUrl),
+        api.get(distributionUrl),
+        api.get(benefitsUrl)
       ]);
 
+      console.log('📊 Dados recebidos:');
+      console.log('  impact:', impactRes.data);
+      console.log('  evolution:', evolutionRes.data);
+      console.log('  distribution:', distributionRes.data);
+      console.log('  benefits:', benefitsRes.data);
+
+      // Atualizar impact summary
       if (impactRes.data) {
         setImpact({
           treesSaved: impactRes.data.treesSaved || 0,
@@ -111,14 +128,25 @@ const Impact = () => {
         });
       }
 
+      // Atualizar evolution
       if (evolutionRes.data && evolutionRes.data.labels) {
         setEvolutionData({
           labels: evolutionRes.data.labels,
           actual: evolutionRes.data.actual,
           goal: evolutionRes.data.goal
         });
+      } else {
+        // Se não tem dados de evolução, mostrar dados atuais como ponto único
+        if (impactRes.data && impactRes.data.carbonSaved > 0) {
+          setEvolutionData({
+            labels: [selectedDate || 'Hoje'],
+            actual: [impactRes.data.carbonSaved],
+            goal: [Math.round(impactRes.data.carbonSaved * 1.2)]
+          });
+        }
       }
 
+      // Atualizar waste distribution
       if (distributionRes.data && distributionRes.data.labels) {
         setWasteDistribution({
           labels: distributionRes.data.labels,
@@ -126,45 +154,40 @@ const Impact = () => {
         });
       }
 
+      // Atualizar benefits
       if (benefitsRes.data && benefitsRes.data.benefits) {
         setBenefitsDetail(benefitsRes.data.benefits);
       }
 
     } catch (err) {
-      console.error('Erro ao carregar dados de impacto:', err);
+      console.error('❌ Erro ao carregar dados de impacto:', err);
       setError('Erro ao carregar dados de impacto. Tente novamente mais tarde.');
     } finally {
       setLoading(false);
     }
   };
+  // Definir data padrão como hoje
+  useEffect(() => {
+    const today = new Date();
+    const formattedDate = today.toISOString().split('T')[0];
+    setSelectedDate(formattedDate);
+  }, []);
 
   useEffect(() => {
     loadPoints();
   }, []);
 
   useEffect(() => {
-    loadImpactData();
-  }, [selectedPeriod, selectedPoint, customStartDate, customEndDate, showCustomDate]);
-
-  const handlePeriodChange = (period) => {
-    setSelectedPeriod(period);
-    if (period !== 'custom') {
-      setShowCustomDate(false);
-    } else {
-      setShowCustomDate(true);
-      // Definir datas padrão (últimos 30 dias)
-      const endDate = new Date();
-      const startDate = new Date();
-      startDate.setDate(startDate.getDate() - 30);
-      setCustomStartDate(startDate.toISOString().split('T')[0]);
-      setCustomEndDate(endDate.toISOString().split('T')[0]);
-    }
-  };
-
-  const applyCustomDate = () => {
-    if (customStartDate && customEndDate) {
+    if (selectedDate) {
       loadImpactData();
     }
+  }, [selectedDate, selectedPoint]);
+
+  // Limpar filtro de data
+  const handleClearDate = () => {
+    const today = new Date();
+    const formattedDate = today.toISOString().split('T')[0];
+    setSelectedDate(formattedDate);
   };
 
   const evolutionChartData = {
@@ -300,6 +323,12 @@ const Impact = () => {
     return Math.round((totalActual / totalGoal) * 100);
   };
 
+  const formatDate = (dateString) => {
+    if (!dateString) return '';
+    const [year, month, day] = dateString.split('-');
+    return `${day}/${month}/${year}`;
+  };
+
   if (loading) {
     return (
       <div className="loading-container">
@@ -326,7 +355,7 @@ const Impact = () => {
       <div className="impact-header" style={{ marginBottom: '25px' }}>
         <div>
           <h2 style={{ margin: '0 0 8px 0' }}>Impacto Ambiental</h2>
-          <p className="impact-subtitle" style={{ color: '#666', margin: 0 }}>Acompanhe o impacto positivo das suas ações</p>
+          <p className="impact-subtitle" style={{ color: '#666', margin: 0 }}>Acompanhe o impacto positivo das suas ações por data de coleta</p>
         </div>
 
         <div className="filters-section" style={{ display: 'flex', gap: '15px', alignItems: 'center', flexWrap: 'wrap', marginTop: '15px' }}>
@@ -354,120 +383,54 @@ const Impact = () => {
             </select>
           </div>
 
-          {/* Período de tempo */}
-          <div className="period-selector" style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-            <button
-              className={`period-btn ${selectedPeriod === 'week' ? 'active' : ''}`}
-              onClick={() => handlePeriodChange('week')}
+          {/* Calendário para selecionar data */}
+          <div className="date-filter" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <i className="fas fa-calendar-alt" style={{ color: '#4CAF50', fontSize: '18px' }}></i>
+            <input
+              type="date"
+              value={selectedDate}
+              onChange={(e) => setSelectedDate(e.target.value)}
               style={{
-                padding: '8px 16px',
-                borderRadius: '6px',
+                padding: '10px 15px',
+                borderRadius: '8px',
                 border: '1px solid #ddd',
-                background: selectedPeriod === 'week' ? '#4CAF50' : 'white',
-                color: selectedPeriod === 'week' ? 'white' : '#333',
-                cursor: 'pointer'
+                backgroundColor: 'white',
+                fontSize: '14px',
+                cursor: 'pointer',
+                minWidth: '180px'
               }}
-            >
-              <i className="fas fa-calendar-week"></i> Semana
-            </button>
+            />
             <button
-              className={`period-btn ${selectedPeriod === 'month' ? 'active' : ''}`}
-              onClick={() => handlePeriodChange('month')}
+              onClick={handleClearDate}
               style={{
-                padding: '8px 16px',
-                borderRadius: '6px',
+                padding: '10px 15px',
+                borderRadius: '8px',
                 border: '1px solid #ddd',
-                background: selectedPeriod === 'month' ? '#4CAF50' : 'white',
-                color: selectedPeriod === 'month' ? 'white' : '#333',
-                cursor: 'pointer'
+                backgroundColor: '#f5f5f5',
+                cursor: 'pointer',
+                fontSize: '14px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px'
               }}
+              title="Voltar para hoje"
             >
-              <i className="fas fa-calendar-alt"></i> Mês
-            </button>
-            <button
-              className={`period-btn ${selectedPeriod === 'year' ? 'active' : ''}`}
-              onClick={() => handlePeriodChange('year')}
-              style={{
-                padding: '8px 16px',
-                borderRadius: '6px',
-                border: '1px solid #ddd',
-                background: selectedPeriod === 'year' ? '#4CAF50' : 'white',
-                color: selectedPeriod === 'year' ? 'white' : '#333',
-                cursor: 'pointer'
-              }}
-            >
-              <i className="fas fa-calendar"></i> Ano
-            </button>
-            <button
-              className={`period-btn ${selectedPeriod === 'custom' ? 'active' : ''}`}
-              onClick={() => handlePeriodChange('custom')}
-              style={{
-                padding: '8px 16px',
-                borderRadius: '6px',
-                border: '1px solid #ddd',
-                background: selectedPeriod === 'custom' ? '#4CAF50' : 'white',
-                color: selectedPeriod === 'custom' ? 'white' : '#333',
-                cursor: 'pointer'
-              }}
-            >
-              <i className="fas fa-calendar-plus"></i> Personalizado
+              <i className="fas fa-sync-alt"></i> Hoje
             </button>
           </div>
         </div>
 
-        {/* Datas personalizadas */}
-        {showCustomDate && (
-          <div style={{ display: 'flex', gap: '15px', alignItems: 'center', marginTop: '15px', padding: '15px', background: '#f5f5f5', borderRadius: '8px' }}>
-            <div>
-              <label style={{ display: 'block', fontSize: '12px', marginBottom: '5px', color: '#666' }}>Data inicial</label>
-              <input
-                type="date"
-                value={customStartDate}
-                onChange={(e) => setCustomStartDate(e.target.value)}
-                style={{
-                  padding: '8px 12px',
-                  borderRadius: '6px',
-                  border: '1px solid #ddd',
-                  fontSize: '14px'
-                }}
-              />
-            </div>
-            <div>
-              <label style={{ display: 'block', fontSize: '12px', marginBottom: '5px', color: '#666' }}>Data final</label>
-              <input
-                type="date"
-                value={customEndDate}
-                onChange={(e) => setCustomEndDate(e.target.value)}
-                style={{
-                  padding: '8px 12px',
-                  borderRadius: '6px',
-                  border: '1px solid #ddd',
-                  fontSize: '14px'
-                }}
-              />
-            </div>
-            <button
-              onClick={applyCustomDate}
-              style={{
-                marginTop: '20px',
-                padding: '8px 20px',
-                background: '#4CAF50',
-                color: 'white',
-                border: 'none',
-                borderRadius: '6px',
-                cursor: 'pointer'
-              }}
-            >
-              Aplicar Filtro
-            </button>
-          </div>
-        )}
+        {/* Informação da data selecionada */}
+        <div style={{ marginTop: '15px', padding: '10px 15px', background: '#e8f5e9', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <i className="fas fa-calendar-check" style={{ color: '#4CAF50' }}></i>
+          <span>Mostrando dados das coletas realizadas em: <strong>{formatDate(selectedDate)}</strong></span>
+        </div>
       </div>
 
       {selectedPoint && (
-        <div className="filter-info" style={{ marginBottom: '20px', padding: '10px 15px', background: '#e8f5e9', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <i className="fas fa-info-circle" style={{ color: '#4CAF50' }}></i>
-          <span>Mostrando dados para: <strong>{selectedPointName}</strong></span>
+        <div className="filter-info" style={{ marginBottom: '20px', padding: '10px 15px', background: '#e3f2fd', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <i className="fas fa-info-circle" style={{ color: '#2196F3' }}></i>
+          <span>Filtrando por ponto: <strong>{selectedPointName}</strong></span>
         </div>
       )}
 
@@ -552,7 +515,7 @@ const Impact = () => {
             ) : (
               <div style={{ textAlign: 'center', padding: '60px', color: '#999' }}>
                 <i className="fas fa-chart-line" style={{ fontSize: '48px', marginBottom: '10px' }}></i>
-                <p>Nenhum dado de evolução disponível</p>
+                <p>Nenhum dado de evolução disponível para esta data</p>
               </div>
             )}
           </div>
@@ -574,7 +537,7 @@ const Impact = () => {
             ) : (
               <div style={{ textAlign: 'center', padding: '60px', color: '#999' }}>
                 <i className="fas fa-chart-pie" style={{ fontSize: '48px', marginBottom: '10px' }}></i>
-                <p>Nenhum dado de distribuição disponível</p>
+                <p>Nenhum dado de distribuição disponível para esta data</p>
               </div>
             )}
           </div>
