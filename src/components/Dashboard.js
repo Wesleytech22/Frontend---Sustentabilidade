@@ -36,7 +36,7 @@ const Dashboard = () => {
     const path = location.pathname;
     if (path.includes('/points')) return 'Pontos de Coleta';
     if (path.includes('/routes')) return 'Rotas';
-    if (path.includes('/optimized-routes')) return 'Rotas Otimizadas com Mapa';
+    if (path.includes('/optimized-routes')) return 'Rotas Otimizadas';
     if (path.includes('/impact')) return 'Impacto Ambiental';
     if (path.includes('/chat')) return 'Chat em Tempo Real';
     if (path.includes('/notifications')) return 'Notificações';
@@ -83,6 +83,7 @@ const Dashboard = () => {
       />
 
       <div className="main-content">
+        {/* Header */}
         <div className="main-header">
           <div className="header-title">
             <i className={getPageIcon()}></i>
@@ -90,11 +91,13 @@ const Dashboard = () => {
           </div>
 
           <div className="header-actions">
+            {/* Sino de Notificações */}
             <NotificationBell
               notifications={notifications}
               unreadCount={socketUnreadCount}
             />
 
+            {/* Status de Conexão */}
             <div className={`connection-status ${isConnected ? 'connected' : 'disconnected'}`}>
               <span className="status-dot"></span>
               <span className="status-text">
@@ -102,19 +105,29 @@ const Dashboard = () => {
               </span>
             </div>
 
-            <div className="datetime">
-              <div className="header-date" title="Data">
-                <i className="fas fa-calendar-alt"></i>
-                <span>{formatDate()}</span>
+            {/* Data e Hora - UMA EM CIMA DA OUTRA */}
+            <div className="datetime" style={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'flex-end',
+              gap: '6px',
+              background: '#f5f5f5',
+              padding: '8px 16px',
+              borderRadius: '20px'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <i className="fas fa-calendar-alt" style={{ color: '#4CAF50', fontSize: '12px' }}></i>
+                <span style={{ fontSize: '12px', whiteSpace: 'nowrap' }}>{formatDate()}</span>
               </div>
-              <div className="header-time" title="Hora">
-                <i className="fas fa-clock"></i>
-                <span>{formatTime()}</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <i className="fas fa-clock" style={{ color: '#4CAF50', fontSize: '12px' }}></i>
+                <span style={{ fontSize: '12px', whiteSpace: 'nowrap' }}>{formatTime()}</span>
               </div>
             </div>
           </div>
         </div>
 
+        {/* Rotas */}
         <div className="dashboard-routes">
           <Routes>
             <Route path="/" element={<Home />} />

@@ -14,13 +14,14 @@ const CollectionPoints = () => {
   const [searchingCep, setSearchingCep] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
-    number: '',        // 👈 NOVO CAMPO
+    number: '',
     address: '',
     city: '',
     state: '',
     zipCode: '',
     wasteTypes: [],
-    capacity: ''
+    capacity: '',
+    currentVolume: ''
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -133,7 +134,8 @@ const CollectionPoints = () => {
       state: point.state || '',
       zipCode: point.zipCode || '',
       wasteTypes: point.wasteTypes || [],
-      capacity: point.capacity || ''
+      capacity: point.capacity || '',
+      currentVolume: point.currentVolume || ''
     });
     setShowEditModal(true);
   };
@@ -152,7 +154,6 @@ const CollectionPoints = () => {
         throw new Error('CEP inválido. Digite um CEP com 8 dígitos.');
       }
 
-      // Construir endereço completo com número
       const fullAddress = formData.number
         ? `${formData.address}, ${formData.number}`
         : formData.address;
@@ -165,10 +166,11 @@ const CollectionPoints = () => {
         state: formData.state?.toUpperCase() || '',
         zipCode: formData.zipCode || '',
         wasteTypes: formData.wasteTypes,
-        capacity: parseFloat(formData.capacity)
+        capacity: parseFloat(formData.capacity),
+        currentVolume: formData.currentVolume ? parseFloat(formData.currentVolume) : 0
       };
 
-      const response = await api.put(`/points/${editingPoint._id}`, pointData);
+      await api.put(`/points/${editingPoint._id}`, pointData);
 
       setSuccess('Ponto de coleta atualizado com sucesso!');
 
@@ -183,7 +185,8 @@ const CollectionPoints = () => {
           state: '',
           zipCode: '',
           wasteTypes: [],
-          capacity: ''
+          capacity: '',
+          currentVolume: ''
         });
         loadPoints();
       }, 1500);
@@ -211,7 +214,6 @@ const CollectionPoints = () => {
         throw new Error('CEP inválido. Digite um CEP com 8 dígitos.');
       }
 
-      // Construir endereço completo com número
       const fullAddress = formData.number
         ? `${formData.address}, ${formData.number}`
         : formData.address;
@@ -224,10 +226,11 @@ const CollectionPoints = () => {
         state: formData.state?.toUpperCase() || '',
         zipCode: formData.zipCode || '',
         wasteTypes: formData.wasteTypes,
-        capacity: parseFloat(formData.capacity)
+        capacity: parseFloat(formData.capacity),
+        currentVolume: formData.currentVolume ? parseFloat(formData.currentVolume) : 0
       };
 
-      const response = await api.post('/points', pointData);
+      await api.post('/points', pointData);
 
       setSuccess('Ponto de coleta criado com sucesso!');
 
@@ -241,7 +244,8 @@ const CollectionPoints = () => {
           state: '',
           zipCode: '',
           wasteTypes: [],
-          capacity: ''
+          capacity: '',
+          currentVolume: ''
         });
         loadPoints();
       }, 1500);
@@ -279,6 +283,18 @@ const CollectionPoints = () => {
     return types[type] || type;
   };
 
+  const getWasteIcon = (type) => {
+    const icons = {
+      'plastico': '🥤',
+      'papel': '📄',
+      'vidro': '🥃',
+      'metal': '🔩',
+      'organico': '🍎',
+      'eletronico': '💻'
+    };
+    return icons[type] || '♻️';
+  };
+
   const filteredPoints = points.filter(point => {
     const matchesSearch = filter === '' ||
       point.name?.toLowerCase().includes(filter.toLowerCase()) ||
@@ -290,6 +306,16 @@ const CollectionPoints = () => {
 
     return matchesSearch && matchesType;
   });
+
+  // Lista de tipos de resíduos com ícones e cores
+  const wasteTypeOptions = [
+    { value: 'plastico', label: 'Plástico', icon: '🥤', color: '#FF6384', bgColor: '#FF638420' },
+    { value: 'papel', label: 'Papel', icon: '📄', color: '#36A2EB', bgColor: '#36A2EB20' },
+    { value: 'vidro', label: 'Vidro', icon: '🥃', color: '#FFCE56', bgColor: '#FFCE5620' },
+    { value: 'metal', label: 'Metal', icon: '🔩', color: '#4CAF50', bgColor: '#4CAF5020' },
+    { value: 'organico', label: 'Orgânico', icon: '🍎', color: '#FF9F40', bgColor: '#FF9F4020' },
+    { value: 'eletronico', label: 'Eletrônico', icon: '💻', color: '#9C27B0', bgColor: '#9C27B020' }
+  ];
 
   if (loading) {
     return (
@@ -340,11 +366,11 @@ const CollectionPoints = () => {
           onChange={(e) => setTypeFilter(e.target.value)}
         >
           <option value="">Todos os tipos</option>
-          <option value="plastico">Plástico</option>
-          <option value="papel">Papel</option>
-          <option value="vidro">Vidro</option>
-          <option value="metal">Metal</option>
-          <option value="organico">Orgânico</option>
+          {wasteTypeOptions.map(option => (
+            <option key={option.value} value={option.value}>
+              {option.icon} {option.label}
+            </option>
+          ))}
         </select>
       </div>
 
@@ -394,8 +420,11 @@ const CollectionPoints = () => {
               {point.wasteTypes && point.wasteTypes.length > 0 && (
                 <div className="point-types">
                   {point.wasteTypes.map(type => (
-                    <span key={type} className="type-tag">
-                      {getWasteTypeLabel(type)}
+                    <span key={type} className="type-tag" style={{
+                      background: wasteTypeOptions.find(o => o.value === type)?.bgColor || '#f5f5f5',
+                      color: wasteTypeOptions.find(o => o.value === type)?.color || '#666'
+                    }}>
+                      {getWasteIcon(type)} {getWasteTypeLabel(type)}
                     </span>
                   ))}
                 </div>
@@ -433,7 +462,7 @@ const CollectionPoints = () => {
       {/* MODAL DE CRIAÇÃO */}
       {showModal && (
         <div className="modal-overlay" onClick={() => setShowModal(false)}>
-          <div className="modal-content" onClick={e => e.stopPropagation()}>
+          <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: '700px' }}>
             <div className="modal-header">
               <h2>Novo Ponto de Coleta</h2>
               <button className="close" onClick={() => setShowModal(false)}>&times;</button>
@@ -480,34 +509,36 @@ const CollectionPoints = () => {
                   </small>
                 </div>
 
-                <div className="form-group">
-                  <label>Logradouro *</label>
-                  <input
-                    type="text"
-                    name="address"
-                    value={formData.address}
-                    onChange={handleInputChange}
-                    required
-                    placeholder="Ex: Rua Augusta"
-                    disabled={saving}
-                  />
-                </div>
+                <div className="form-row">
+                  <div className="form-group" style={{ flex: 2 }}>
+                    <label>Logradouro *</label>
+                    <input
+                      type="text"
+                      name="address"
+                      value={formData.address}
+                      onChange={handleInputChange}
+                      required
+                      placeholder="Ex: Rua Augusta"
+                      disabled={saving}
+                    />
+                  </div>
 
-                <div className="form-group">
-                  <label>Número *</label>
-                  <input
-                    type="text"
-                    name="number"
-                    value={formData.number}
-                    onChange={handleInputChange}
-                    required
-                    placeholder="Ex: 500"
-                    disabled={saving}
-                  />
+                  <div className="form-group" style={{ flex: 1 }}>
+                    <label>Número *</label>
+                    <input
+                      type="text"
+                      name="number"
+                      value={formData.number}
+                      onChange={handleInputChange}
+                      required
+                      placeholder="Ex: 500"
+                      disabled={saving}
+                    />
+                  </div>
                 </div>
 
                 <div className="form-row">
-                  <div className="form-group">
+                  <div className="form-group" style={{ flex: 2 }}>
                     <label>Cidade</label>
                     <input
                       type="text"
@@ -519,7 +550,7 @@ const CollectionPoints = () => {
                     />
                   </div>
 
-                  <div className="form-group">
+                  <div className="form-group" style={{ flex: 1 }}>
                     <label>UF</label>
                     <input
                       type="text"
@@ -533,35 +564,76 @@ const CollectionPoints = () => {
                   </div>
                 </div>
 
-                <div className="form-group">
-                  <label>Capacidade (kg) *</label>
-                  <input
-                    type="number"
-                    name="capacity"
-                    value={formData.capacity}
-                    onChange={handleInputChange}
-                    required
-                    placeholder="5000"
-                    min="1"
-                    disabled={saving}
-                  />
+                <div className="form-row">
+                  <div className="form-group" style={{ flex: 1 }}>
+                    <label>Capacidade (kg) *</label>
+                    <input
+                      type="number"
+                      name="capacity"
+                      value={formData.capacity}
+                      onChange={handleInputChange}
+                      required
+                      placeholder="5000"
+                      min="1"
+                      disabled={saving}
+                    />
+                  </div>
+
+                  <div className="form-group" style={{ flex: 1 }}>
+                    <label>Volume Inicial (kg)</label>
+                    <input
+                      type="number"
+                      name="currentVolume"
+                      value={formData.currentVolume}
+                      onChange={handleInputChange}
+                      placeholder="Opcional"
+                      min="0"
+                      step="10"
+                      disabled={saving}
+                    />
+                  </div>
                 </div>
 
                 <div className="form-group">
                   <label>Tipos de Resíduos Aceitos</label>
-                  <div className="checkbox-group">
-                    {['plastico', 'papel', 'vidro', 'metal', 'organico', 'eletronico'].map(type => (
-                      <label key={type}>
+                  <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(3, 1fr)',
+                    gap: '12px',
+                    marginTop: '8px'
+                  }}>
+                    {wasteTypeOptions.map(option => (
+                      <label
+                        key={option.value}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '8px',
+                          padding: '10px 12px',
+                          borderRadius: '8px',
+                          cursor: 'pointer',
+                          transition: 'all 0.2s',
+                          background: formData.wasteTypes.includes(option.value) ? option.bgColor : '#f5f5f5',
+                          border: formData.wasteTypes.includes(option.value) ? `1px solid ${option.color}` : '1px solid #e0e0e0'
+                        }}
+                      >
                         <input
                           type="checkbox"
-                          checked={formData.wasteTypes.includes(type)}
-                          onChange={() => handleWasteTypeChange(type)}
+                          checked={formData.wasteTypes.includes(option.value)}
+                          onChange={() => handleWasteTypeChange(option.value)}
                           disabled={saving}
+                          style={{ marginRight: '5px' }}
                         />
-                        {getWasteTypeLabel(type)}
+                        <span style={{ fontSize: '20px' }}>{option.icon}</span>
+                        <span style={{ fontWeight: '500', color: formData.wasteTypes.includes(option.value) ? option.color : '#666' }}>
+                          {option.label}
+                        </span>
                       </label>
                     ))}
                   </div>
+                  <small style={{ color: '#666', fontSize: '11px', display: 'block', marginTop: '8px' }}>
+                    Selecione um ou mais tipos de resíduos aceitos neste ponto
+                  </small>
                 </div>
 
                 <div className="modal-actions">
@@ -600,7 +672,7 @@ const CollectionPoints = () => {
       {/* MODAL DE EDIÇÃO */}
       {showEditModal && editingPoint && (
         <div className="modal-overlay" onClick={() => setShowEditModal(false)}>
-          <div className="modal-content" onClick={e => e.stopPropagation()}>
+          <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: '700px' }}>
             <div className="modal-header">
               <h2>Editar Ponto de Coleta</h2>
               <button className="close" onClick={() => setShowEditModal(false)}>&times;</button>
@@ -640,34 +712,36 @@ const CollectionPoints = () => {
                   />
                 </div>
 
-                <div className="form-group">
-                  <label>Logradouro *</label>
-                  <input
-                    type="text"
-                    name="address"
-                    value={formData.address}
-                    onChange={handleInputChange}
-                    required
-                    placeholder="Ex: Rua Augusta"
-                    disabled={saving}
-                  />
-                </div>
+                <div className="form-row">
+                  <div className="form-group" style={{ flex: 2 }}>
+                    <label>Logradouro *</label>
+                    <input
+                      type="text"
+                      name="address"
+                      value={formData.address}
+                      onChange={handleInputChange}
+                      required
+                      placeholder="Ex: Rua Augusta"
+                      disabled={saving}
+                    />
+                  </div>
 
-                <div className="form-group">
-                  <label>Número *</label>
-                  <input
-                    type="text"
-                    name="number"
-                    value={formData.number}
-                    onChange={handleInputChange}
-                    required
-                    placeholder="Ex: 500"
-                    disabled={saving}
-                  />
+                  <div className="form-group" style={{ flex: 1 }}>
+                    <label>Número *</label>
+                    <input
+                      type="text"
+                      name="number"
+                      value={formData.number}
+                      onChange={handleInputChange}
+                      required
+                      placeholder="Ex: 500"
+                      disabled={saving}
+                    />
+                  </div>
                 </div>
 
                 <div className="form-row">
-                  <div className="form-group">
+                  <div className="form-group" style={{ flex: 2 }}>
                     <label>Cidade</label>
                     <input
                       type="text"
@@ -679,7 +753,7 @@ const CollectionPoints = () => {
                     />
                   </div>
 
-                  <div className="form-group">
+                  <div className="form-group" style={{ flex: 1 }}>
                     <label>UF</label>
                     <input
                       type="text"
@@ -693,32 +767,70 @@ const CollectionPoints = () => {
                   </div>
                 </div>
 
-                <div className="form-group">
-                  <label>Capacidade (kg) *</label>
-                  <input
-                    type="number"
-                    name="capacity"
-                    value={formData.capacity}
-                    onChange={handleInputChange}
-                    required
-                    placeholder="5000"
-                    min="1"
-                    disabled={saving}
-                  />
+                <div className="form-row">
+                  <div className="form-group" style={{ flex: 1 }}>
+                    <label>Capacidade (kg) *</label>
+                    <input
+                      type="number"
+                      name="capacity"
+                      value={formData.capacity}
+                      onChange={handleInputChange}
+                      required
+                      placeholder="5000"
+                      min="1"
+                      disabled={saving}
+                    />
+                  </div>
+
+                  <div className="form-group" style={{ flex: 1 }}>
+                    <label>Volume Atual (kg)</label>
+                    <input
+                      type="number"
+                      name="currentVolume"
+                      value={formData.currentVolume}
+                      onChange={handleInputChange}
+                      placeholder="Volume atual"
+                      min="0"
+                      step="10"
+                      disabled={saving}
+                    />
+                  </div>
                 </div>
 
                 <div className="form-group">
                   <label>Tipos de Resíduos Aceitos</label>
-                  <div className="checkbox-group">
-                    {['plastico', 'papel', 'vidro', 'metal', 'organico', 'eletronico'].map(type => (
-                      <label key={type}>
+                  <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(3, 1fr)',
+                    gap: '12px',
+                    marginTop: '8px'
+                  }}>
+                    {wasteTypeOptions.map(option => (
+                      <label
+                        key={option.value}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '8px',
+                          padding: '10px 12px',
+                          borderRadius: '8px',
+                          cursor: 'pointer',
+                          transition: 'all 0.2s',
+                          background: formData.wasteTypes.includes(option.value) ? option.bgColor : '#f5f5f5',
+                          border: formData.wasteTypes.includes(option.value) ? `1px solid ${option.color}` : '1px solid #e0e0e0'
+                        }}
+                      >
                         <input
                           type="checkbox"
-                          checked={formData.wasteTypes.includes(type)}
-                          onChange={() => handleWasteTypeChange(type)}
+                          checked={formData.wasteTypes.includes(option.value)}
+                          onChange={() => handleWasteTypeChange(option.value)}
                           disabled={saving}
+                          style={{ marginRight: '5px' }}
                         />
-                        {getWasteTypeLabel(type)}
+                        <span style={{ fontSize: '20px' }}>{option.icon}</span>
+                        <span style={{ fontWeight: '500', color: formData.wasteTypes.includes(option.value) ? option.color : '#666' }}>
+                          {option.label}
+                        </span>
                       </label>
                     ))}
                   </div>

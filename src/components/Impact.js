@@ -33,6 +33,9 @@ const Impact = () => {
   const [selectedPeriod, setSelectedPeriod] = useState('month');
   const [selectedPoint, setSelectedPoint] = useState('');
   const [points, setPoints] = useState([]);
+  const [customStartDate, setCustomStartDate] = useState('');
+  const [customEndDate, setCustomEndDate] = useState('');
+  const [showCustomDate, setShowCustomDate] = useState(false);
   const [impact, setImpact] = useState({
     treesSaved: 0,
     waterSaved: 0,
@@ -70,14 +73,29 @@ const Impact = () => {
       setLoading(true);
       setError(null);
 
-      const params = new URLSearchParams();
-      if (selectedPoint) params.append('pointId', selectedPoint);
+      // Construir URL com parâmetros
+      let summaryUrl = '/impact/summary';
+      let evolutionUrl = `/impact/evolution?period=${selectedPeriod}`;
+      let distributionUrl = '/impact/waste-distribution';
+      let benefitsUrl = '/impact/benefits';
+
+      // Adicionar filtro de ponto
+      if (selectedPoint) {
+        summaryUrl += `?pointId=${selectedPoint}`;
+        evolutionUrl += `&pointId=${selectedPoint}`;
+        distributionUrl += `?pointId=${selectedPoint}`;
+      }
+
+      // Adicionar filtro de data personalizada
+      if (showCustomDate && customStartDate && customEndDate) {
+        evolutionUrl += `&startDate=${customStartDate}&endDate=${customEndDate}`;
+      }
 
       const [impactRes, evolutionRes, distributionRes, benefitsRes] = await Promise.all([
-        api.get('/impact/summary').catch(() => ({ data: null })),
-        api.get(`/impact/evolution?period=${selectedPeriod}${selectedPoint ? `&pointId=${selectedPoint}` : ''}`).catch(() => ({ data: null })),
-        api.get(`/impact/waste-distribution${selectedPoint ? `?pointId=${selectedPoint}` : ''}`).catch(() => ({ data: null })),
-        api.get('/impact/benefits').catch(() => ({ data: null }))
+        api.get(summaryUrl).catch(() => ({ data: null })),
+        api.get(evolutionUrl).catch(() => ({ data: null })),
+        api.get(distributionUrl).catch(() => ({ data: null })),
+        api.get(benefitsUrl).catch(() => ({ data: null }))
       ]);
 
       if (impactRes.data) {
@@ -126,7 +144,28 @@ const Impact = () => {
 
   useEffect(() => {
     loadImpactData();
-  }, [selectedPeriod, selectedPoint]);
+  }, [selectedPeriod, selectedPoint, customStartDate, customEndDate, showCustomDate]);
+
+  const handlePeriodChange = (period) => {
+    setSelectedPeriod(period);
+    if (period !== 'custom') {
+      setShowCustomDate(false);
+    } else {
+      setShowCustomDate(true);
+      // Definir datas padrão (últimos 30 dias)
+      const endDate = new Date();
+      const startDate = new Date();
+      startDate.setDate(startDate.getDate() - 30);
+      setCustomStartDate(startDate.toISOString().split('T')[0]);
+      setCustomEndDate(endDate.toISOString().split('T')[0]);
+    }
+  };
+
+  const applyCustomDate = () => {
+    if (customStartDate && customEndDate) {
+      loadImpactData();
+    }
+  };
 
   const evolutionChartData = {
     labels: evolutionData.labels,
@@ -167,7 +206,9 @@ const Impact = () => {
           '#36A2EB',
           '#FFCE56',
           '#4CAF50',
-          '#FF9F40'
+          '#FF9F40',
+          '#9C27B0',
+          '#999999'
         ],
         borderWidth: 0,
       }
@@ -252,7 +293,6 @@ const Impact = () => {
   };
 
   const totalWaste = wasteDistribution.data.reduce((a, b) => a + b, 0);
-
   const getGoalPercentage = () => {
     const totalActual = evolutionData.actual.reduce((a, b) => a + b, 0);
     const totalGoal = evolutionData.goal.reduce((a, b) => a + b, 0);
@@ -282,24 +322,27 @@ const Impact = () => {
   const selectedPointName = points.find(p => p._id === selectedPoint)?.name || 'Todos os pontos';
 
   return (
-    <div className="impact-container">
-      <div className="impact-header">
+    <div className="impact-container" style={{ padding: '20px' }}>
+      <div className="impact-header" style={{ marginBottom: '25px' }}>
         <div>
-          <h2>Impacto Ambiental</h2>
-          <p className="impact-subtitle">Acompanhe o impacto positivo das suas ações</p>
+          <h2 style={{ margin: '0 0 8px 0' }}>Impacto Ambiental</h2>
+          <p className="impact-subtitle" style={{ color: '#666', margin: 0 }}>Acompanhe o impacto positivo das suas ações</p>
         </div>
-        <div className="filters-section" style={{ display: 'flex', gap: '15px', alignItems: 'center', flexWrap: 'wrap' }}>
+
+        <div className="filters-section" style={{ display: 'flex', gap: '15px', alignItems: 'center', flexWrap: 'wrap', marginTop: '15px' }}>
+          {/* Filtro por ponto de coleta */}
           <div className="point-filter" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <i className="fas fa-map-marker-alt" style={{ color: '#4CAF50' }}></i>
             <select
               value={selectedPoint}
               onChange={(e) => setSelectedPoint(e.target.value)}
               style={{
-                padding: '8px 12px',
+                padding: '10px 15px',
                 borderRadius: '8px',
                 border: '1px solid #ddd',
                 backgroundColor: 'white',
-                minWidth: '200px'
+                minWidth: '220px',
+                cursor: 'pointer'
               }}
             >
               <option value="">Todos os pontos</option>
@@ -310,195 +353,256 @@ const Impact = () => {
               ))}
             </select>
           </div>
-          <div className="period-selector">
+
+          {/* Período de tempo */}
+          <div className="period-selector" style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
             <button
               className={`period-btn ${selectedPeriod === 'week' ? 'active' : ''}`}
-              onClick={() => setSelectedPeriod('week')}
+              onClick={() => handlePeriodChange('week')}
+              style={{
+                padding: '8px 16px',
+                borderRadius: '6px',
+                border: '1px solid #ddd',
+                background: selectedPeriod === 'week' ? '#4CAF50' : 'white',
+                color: selectedPeriod === 'week' ? 'white' : '#333',
+                cursor: 'pointer'
+              }}
             >
-              <i className="fas fa-calendar-week"></i>
-              Semana
+              <i className="fas fa-calendar-week"></i> Semana
             </button>
             <button
               className={`period-btn ${selectedPeriod === 'month' ? 'active' : ''}`}
-              onClick={() => setSelectedPeriod('month')}
+              onClick={() => handlePeriodChange('month')}
+              style={{
+                padding: '8px 16px',
+                borderRadius: '6px',
+                border: '1px solid #ddd',
+                background: selectedPeriod === 'month' ? '#4CAF50' : 'white',
+                color: selectedPeriod === 'month' ? 'white' : '#333',
+                cursor: 'pointer'
+              }}
             >
-              <i className="fas fa-calendar-alt"></i>
-              Mês
+              <i className="fas fa-calendar-alt"></i> Mês
             </button>
             <button
               className={`period-btn ${selectedPeriod === 'year' ? 'active' : ''}`}
-              onClick={() => setSelectedPeriod('year')}
+              onClick={() => handlePeriodChange('year')}
+              style={{
+                padding: '8px 16px',
+                borderRadius: '6px',
+                border: '1px solid #ddd',
+                background: selectedPeriod === 'year' ? '#4CAF50' : 'white',
+                color: selectedPeriod === 'year' ? 'white' : '#333',
+                cursor: 'pointer'
+              }}
             >
-              <i className="fas fa-calendar"></i>
-              Ano
+              <i className="fas fa-calendar"></i> Ano
+            </button>
+            <button
+              className={`period-btn ${selectedPeriod === 'custom' ? 'active' : ''}`}
+              onClick={() => handlePeriodChange('custom')}
+              style={{
+                padding: '8px 16px',
+                borderRadius: '6px',
+                border: '1px solid #ddd',
+                background: selectedPeriod === 'custom' ? '#4CAF50' : 'white',
+                color: selectedPeriod === 'custom' ? 'white' : '#333',
+                cursor: 'pointer'
+              }}
+            >
+              <i className="fas fa-calendar-plus"></i> Personalizado
             </button>
           </div>
         </div>
+
+        {/* Datas personalizadas */}
+        {showCustomDate && (
+          <div style={{ display: 'flex', gap: '15px', alignItems: 'center', marginTop: '15px', padding: '15px', background: '#f5f5f5', borderRadius: '8px' }}>
+            <div>
+              <label style={{ display: 'block', fontSize: '12px', marginBottom: '5px', color: '#666' }}>Data inicial</label>
+              <input
+                type="date"
+                value={customStartDate}
+                onChange={(e) => setCustomStartDate(e.target.value)}
+                style={{
+                  padding: '8px 12px',
+                  borderRadius: '6px',
+                  border: '1px solid #ddd',
+                  fontSize: '14px'
+                }}
+              />
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: '12px', marginBottom: '5px', color: '#666' }}>Data final</label>
+              <input
+                type="date"
+                value={customEndDate}
+                onChange={(e) => setCustomEndDate(e.target.value)}
+                style={{
+                  padding: '8px 12px',
+                  borderRadius: '6px',
+                  border: '1px solid #ddd',
+                  fontSize: '14px'
+                }}
+              />
+            </div>
+            <button
+              onClick={applyCustomDate}
+              style={{
+                marginTop: '20px',
+                padding: '8px 20px',
+                background: '#4CAF50',
+                color: 'white',
+                border: 'none',
+                borderRadius: '6px',
+                cursor: 'pointer'
+              }}
+            >
+              Aplicar Filtro
+            </button>
+          </div>
+        )}
       </div>
 
       {selectedPoint && (
-        <div className="filter-info" style={{ marginBottom: '20px', padding: '10px', background: '#e8f5e9', borderRadius: '8px' }}>
-          <i className="fas fa-info-circle"></i> Mostrando dados para: <strong>{selectedPointName}</strong>
+        <div className="filter-info" style={{ marginBottom: '20px', padding: '10px 15px', background: '#e8f5e9', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <i className="fas fa-info-circle" style={{ color: '#4CAF50' }}></i>
+          <span>Mostrando dados para: <strong>{selectedPointName}</strong></span>
         </div>
       )}
 
-      <div className="impact-cards-grid">
-        <div className="impact-card primary">
-          <div className="impact-icon-wrapper">
-            <i className="fas fa-tree"></i>
-          </div>
-          <div className="impact-content">
-            <span className="impact-label">Árvores Preservadas</span>
-            <span className="impact-value">{impact.treesSaved.toLocaleString()}</span>
-          </div>
-        </div>
-
-        <div className="impact-card">
-          <div className="impact-icon-wrapper blue">
-            <i className="fas fa-water"></i>
-          </div>
-          <div className="impact-content">
-            <span className="impact-label">Água Economizada</span>
-            <span className="impact-value">{impact.waterSaved.toLocaleString()} L</span>
+      {/* Cards de impacto principal */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '20px', marginBottom: '30px' }}>
+        <div style={{ background: 'linear-gradient(135deg, #4CAF50, #2E7D32)', padding: '20px', borderRadius: '12px', color: 'white' }}>
+          <i className="fas fa-tree" style={{ fontSize: '32px', opacity: 0.8 }}></i>
+          <div style={{ marginTop: '10px' }}>
+            <div style={{ fontSize: '13px', opacity: 0.8 }}>Árvores Preservadas</div>
+            <div style={{ fontSize: '28px', fontWeight: 'bold' }}>{impact.treesSaved.toLocaleString()}</div>
           </div>
         </div>
 
-        <div className="impact-card">
-          <div className="impact-icon-wrapper orange">
-            <i className="fas fa-bolt"></i>
-          </div>
-          <div className="impact-content">
-            <span className="impact-label">Energia Economizada</span>
-            <span className="impact-value">{impact.energySaved.toLocaleString()} kWh</span>
+        <div style={{ background: '#2196F3', padding: '20px', borderRadius: '12px', color: 'white' }}>
+          <i className="fas fa-water" style={{ fontSize: '32px', opacity: 0.8 }}></i>
+          <div style={{ marginTop: '10px' }}>
+            <div style={{ fontSize: '13px', opacity: 0.8 }}>Água Economizada</div>
+            <div style={{ fontSize: '28px', fontWeight: 'bold' }}>{impact.waterSaved.toLocaleString()} L</div>
           </div>
         </div>
 
-        <div className="impact-card">
-          <div className="impact-icon-wrapper green">
-            <i className="fas fa-leaf"></i>
+        <div style={{ background: '#FF9800', padding: '20px', borderRadius: '12px', color: 'white' }}>
+          <i className="fas fa-bolt" style={{ fontSize: '32px', opacity: 0.8 }}></i>
+          <div style={{ marginTop: '10px' }}>
+            <div style={{ fontSize: '13px', opacity: 0.8 }}>Energia Economizada</div>
+            <div style={{ fontSize: '28px', fontWeight: 'bold' }}>{impact.energySaved.toLocaleString()} kWh</div>
           </div>
-          <div className="impact-content">
-            <span className="impact-label">CO₂ Evitado</span>
-            <span className="impact-value">{impact.carbonSaved.toLocaleString()} kg</span>
+        </div>
+
+        <div style={{ background: '#9C27B0', padding: '20px', borderRadius: '12px', color: 'white' }}>
+          <i className="fas fa-leaf" style={{ fontSize: '32px', opacity: 0.8 }}></i>
+          <div style={{ marginTop: '10px' }}>
+            <div style={{ fontSize: '13px', opacity: 0.8 }}>CO₂ Evitado</div>
+            <div style={{ fontSize: '28px', fontWeight: 'bold' }}>{impact.carbonSaved.toLocaleString()} kg</div>
           </div>
         </div>
       </div>
 
-      <div className="metrics-grid">
-        <div className="metric-card">
-          <div className="metric-icon">
-            <i className="fas fa-chart-line"></i>
-          </div>
-          <div className="metric-info">
-            <span className="metric-label">Taxa de Reciclagem</span>
-            <span className="metric-value">{impact.recyclingRate}%</span>
-            <div className="progress-bar">
-              <div className="progress-fill" style={{ width: `${impact.recyclingRate}%` }}></div>
-            </div>
+      {/* Métricas secundárias */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '15px', marginBottom: '30px' }}>
+        <div style={{ background: '#f5f5f5', padding: '15px', borderRadius: '8px', textAlign: 'center' }}>
+          <i className="fas fa-chart-line" style={{ fontSize: '24px', color: '#4CAF50' }}></i>
+          <div style={{ fontSize: '12px', color: '#666', marginTop: '5px' }}>Taxa de Reciclagem</div>
+          <div style={{ fontSize: '24px', fontWeight: 'bold' }}>{impact.recyclingRate}%</div>
+          <div style={{ height: '6px', background: '#e0e0e0', borderRadius: '3px', marginTop: '8px', overflow: 'hidden' }}>
+            <div style={{ width: `${impact.recyclingRate}%`, height: '100%', background: '#4CAF50', borderRadius: '3px' }}></div>
           </div>
         </div>
 
-        <div className="metric-card">
-          <div className="metric-icon">
-            <i className="fas fa-industry"></i>
-          </div>
-          <div className="metric-info">
-            <span className="metric-label">Redução de CO₂</span>
-            <span className="metric-value">{impact.co2Reduction.toLocaleString()} kg</span>
-            <span className="metric-sub">Equivalente a {Math.round(impact.co2Reduction / 20)} carros/ano</span>
-          </div>
+        <div style={{ background: '#f5f5f5', padding: '15px', borderRadius: '8px', textAlign: 'center' }}>
+          <i className="fas fa-industry" style={{ fontSize: '24px', color: '#2196F3' }}></i>
+          <div style={{ fontSize: '12px', color: '#666', marginTop: '5px' }}>Redução de CO₂</div>
+          <div style={{ fontSize: '24px', fontWeight: 'bold' }}>{impact.co2Reduction.toLocaleString()} kg</div>
+          <div style={{ fontSize: '11px', color: '#999' }}>Equivalente a {Math.round(impact.co2Reduction / 20)} carros/ano</div>
         </div>
 
-        <div className="metric-card">
-          <div className="metric-icon">
-            <i className="fas fa-gas-pump"></i>
-          </div>
-          <div className="metric-info">
-            <span className="metric-label">Combustível Economizado</span>
-            <span className="metric-value">{impact.fuelSaved.toLocaleString()} L</span>
-            <span className="metric-sub">Rotas otimizadas</span>
-          </div>
+        <div style={{ background: '#f5f5f5', padding: '15px', borderRadius: '8px', textAlign: 'center' }}>
+          <i className="fas fa-gas-pump" style={{ fontSize: '24px', color: '#FF9800' }}></i>
+          <div style={{ fontSize: '12px', color: '#666', marginTop: '5px' }}>Combustível Economizado</div>
+          <div style={{ fontSize: '24px', fontWeight: 'bold' }}>{impact.fuelSaved.toLocaleString()} L</div>
+          <div style={{ fontSize: '11px', color: '#999' }}>Rotas otimizadas</div>
         </div>
 
-        <div className="metric-card">
-          <div className="metric-icon">
-            <i className="fas fa-trash-alt"></i>
-          </div>
-          <div className="metric-info">
-            <span className="metric-label">Resíduos Desviados</span>
-            <span className="metric-value">{impact.wasteDiverted.toLocaleString()} kg</span>
-            <span className="metric-sub">De aterros sanitários</span>
-          </div>
+        <div style={{ background: '#f5f5f5', padding: '15px', borderRadius: '8px', textAlign: 'center' }}>
+          <i className="fas fa-trash-alt" style={{ fontSize: '24px', color: '#9C27B0' }}></i>
+          <div style={{ fontSize: '12px', color: '#666', marginTop: '5px' }}>Resíduos Desviados</div>
+          <div style={{ fontSize: '24px', fontWeight: 'bold' }}>{impact.wasteDiverted.toLocaleString()} kg</div>
+          <div style={{ fontSize: '11px', color: '#999' }}>De aterros sanitários</div>
         </div>
       </div>
 
-      <div className="impact-charts">
-        <div className="chart-card">
-          <div className="chart-header">
-            <i className="fas fa-chart-line"></i>
-            <h3>Evolução da Redução de CO₂</h3>
+      {/* Gráficos */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(450px, 1fr))', gap: '25px', marginBottom: '30px' }}>
+        <div style={{ background: 'white', padding: '20px', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.1)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '20px' }}>
+            <i className="fas fa-chart-line" style={{ fontSize: '20px', color: '#4CAF50' }}></i>
+            <h3 style={{ margin: 0 }}>Evolução da Redução de CO₂</h3>
           </div>
-          <div className="chart-wrapper">
+          <div style={{ height: '350px' }}>
             {evolutionData.actual.length > 0 ? (
               <Line data={evolutionChartData} options={lineOptions} />
             ) : (
-              <div className="no-data-message">
-                <i className="fas fa-chart-line"></i>
+              <div style={{ textAlign: 'center', padding: '60px', color: '#999' }}>
+                <i className="fas fa-chart-line" style={{ fontSize: '48px', marginBottom: '10px' }}></i>
                 <p>Nenhum dado de evolução disponível</p>
               </div>
             )}
           </div>
-          <div className="chart-footer">
-            <div className="achievement-badge">
-              <i className="fas fa-trophy"></i>
-              <span>Meta anual: {getGoalPercentage()}% atingida</span>
-            </div>
+          <div style={{ marginTop: '15px', textAlign: 'center' }}>
+            <span style={{ background: '#f0f0f0', padding: '6px 12px', borderRadius: '20px', fontSize: '13px' }}>
+              <i className="fas fa-trophy"></i> Meta anual: {getGoalPercentage()}% atingida
+            </span>
           </div>
         </div>
 
-        <div className="chart-card">
-          <div className="chart-header">
-            <i className="fas fa-chart-pie"></i>
-            <h3>Distribuição por Tipo de Resíduo</h3>
+        <div style={{ background: 'white', padding: '20px', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.1)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '20px' }}>
+            <i className="fas fa-chart-pie" style={{ fontSize: '20px', color: '#FF9800' }}></i>
+            <h3 style={{ margin: 0 }}>Distribuição por Tipo de Resíduo</h3>
           </div>
-          <div className="chart-wrapper">
+          <div style={{ height: '350px' }}>
             {totalWaste > 0 ? (
               <Doughnut data={wasteDistributionData} options={doughnutOptions} />
             ) : (
-              <div className="no-data-message">
-                <i className="fas fa-chart-pie"></i>
+              <div style={{ textAlign: 'center', padding: '60px', color: '#999' }}>
+                <i className="fas fa-chart-pie" style={{ fontSize: '48px', marginBottom: '10px' }}></i>
                 <p>Nenhum dado de distribuição disponível</p>
               </div>
             )}
           </div>
-          <div className="chart-footer">
-            <div className="total-badge">
-              <i className="fas fa-weight-hanging"></i>
-              <span>Total: {totalWaste.toLocaleString()} kg</span>
-            </div>
+          <div style={{ marginTop: '15px', textAlign: 'center' }}>
+            <span style={{ background: '#f0f0f0', padding: '6px 12px', borderRadius: '20px', fontSize: '13px' }}>
+              <i className="fas fa-weight-hanging"></i> Total: {totalWaste.toLocaleString()} kg
+            </span>
           </div>
         </div>
       </div>
 
+      {/* Benefícios detalhados */}
       {benefitsDetail.length > 0 && (
-        <div className="benefits-section">
-          <h3>
-            <i className="fas fa-star"></i>
-            Impacto Detalhado
-          </h3>
-          <div className="benefits-grid">
+        <div style={{ background: 'white', padding: '20px', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.1)' }}>
+          <h3 style={{ marginBottom: '20px' }}><i className="fas fa-star"></i> Impacto Detalhado</h3>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '20px' }}>
             {benefitsDetail.map((benefit, index) => (
-              <div key={benefit.id || index} className="benefit-card">
-                <div className="benefit-header">
-                  <i className={`fas fa-${benefit.icon || 'leaf'}`}></i>
-                  <h4>{benefit.title}</h4>
+              <div key={benefit.id || index} style={{ padding: '15px', background: '#f9f9f9', borderRadius: '8px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
+                  <i className={`fas fa-${benefit.icon || 'leaf'}`} style={{ fontSize: '24px', color: '#4CAF50' }}></i>
+                  <h4 style={{ margin: 0 }}>{benefit.title}</h4>
                 </div>
-                <p className="benefit-description">{benefit.description}</p>
-                <div className="benefit-stats">
+                <p style={{ fontSize: '13px', color: '#666', marginBottom: '10px' }}>{benefit.description}</p>
+                <div style={{ display: 'flex', gap: '15px', fontSize: '12px' }}>
                   {benefit.stats?.map((stat, idx) => (
-                    <div key={idx} className="stat">
-                      <span>{stat.label}</span>
-                      <strong>{stat.value}</strong>
+                    <div key={idx}>
+                      <span style={{ color: '#999' }}>{stat.label}:</span>
+                      <strong style={{ display: 'block', color: '#4CAF50' }}>{stat.value}</strong>
                     </div>
                   ))}
                 </div>
@@ -507,36 +611,6 @@ const Impact = () => {
           </div>
         </div>
       )}
-
-      <style jsx>{`
-        .no-data-message {
-          text-align: center;
-          padding: 60px;
-          color: #999;
-        }
-        .no-data-message i {
-          font-size: 48px;
-          margin-bottom: 10px;
-        }
-        .error-container {
-          text-align: center;
-          padding: 50px;
-          background: #fff3f3;
-          border-radius: 12px;
-          color: #d32f2f;
-        }
-        .error-container i {
-          font-size: 48px;
-          margin-bottom: 15px;
-        }
-        .filter-info {
-          animation: fadeIn 0.3s ease;
-        }
-        @keyframes fadeIn {
-          from { opacity: 0; transform: translateY(-10px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
-      `}</style>
     </div>
   );
 };
