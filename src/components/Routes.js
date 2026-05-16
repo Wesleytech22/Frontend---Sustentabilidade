@@ -12,11 +12,14 @@ const RoutesList = () => {
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [routeDetails, setRouteDetails] = useState(null);
 
-  // Estados para vinculação de rotas
+  // ========== ADICIONADO: Estados para paginação ==========
+  const [currentPage, setCurrentPage] = useState(1);
+  const [routesPerPage] = useState(6);
+
   // Estados para vinculação de rotas
   const [showLinkModal, setShowLinkModal] = useState(false);
-  const [availableRoutes, setAvailableRoutes] = useState([]);  // Mudou de availablePoints
-  const [selectedRouteIds, setSelectedRouteIds] = useState([]); // Mudou de selectedPointIds
+  const [availableRoutes, setAvailableRoutes] = useState([]);
+  const [selectedRouteIds, setSelectedRouteIds] = useState([]);
   const [newRouteName, setNewRouteName] = useState('');
   const [linking, setLinking] = useState(false);
 
@@ -55,7 +58,12 @@ const RoutesList = () => {
 
       const response = await axios.get(`${API_URL}/routes`, getAuthHeaders());
 
-      const routesWithStatus = response.data.map(route => {
+      // ========== ADICIONADO: Filtrar apenas rotas em agendamento (PLANNED) e em andamento (IN_PROGRESS) ==========
+      const activeRoutes = response.data.filter(route =>
+        route.status === 'PLANNED' || route.status === 'IN_PROGRESS'
+      );
+
+      const routesWithStatus = activeRoutes.map(route => {
         const statusInfo = calculateRouteStatus(route);
         return {
           ...route,
@@ -66,6 +74,8 @@ const RoutesList = () => {
       });
 
       setRoutes(routesWithStatus);
+      // ========== ADICIONADO: Resetar para página 1 ao recarregar ==========
+      setCurrentPage(1);
     } catch (err) {
       console.error('Erro ao buscar rotas:', err);
       if (err.response?.status === 401) {
@@ -78,6 +88,27 @@ const RoutesList = () => {
       }
     } finally {
       setLoading(false);
+    }
+  };
+
+  // ========== ADICIONADO: Funções de paginação ==========
+  const getCurrentRoutes = () => {
+    const indexOfLastRoute = currentPage * routesPerPage;
+    const indexOfFirstRoute = indexOfLastRoute - routesPerPage;
+    return routes.slice(indexOfFirstRoute, indexOfLastRoute);
+  };
+
+  const paginate = (pageNumber) => setCurrentPage(pageNumber);
+
+  const nextPage = () => {
+    if (currentPage < Math.ceil(routes.length / routesPerPage)) {
+      setCurrentPage(currentPage + 1);
+    }
+  };
+
+  const prevPage = () => {
+    if (currentPage > 1) {
+      setCurrentPage(currentPage - 1);
     }
   };
 
@@ -96,7 +127,6 @@ const RoutesList = () => {
     try {
       const response = await axios.get(`${API_URL}/routes`, getAuthHeaders());
 
-      // Filtrar apenas rotas PLANEJADAS (não concluídas, não canceladas, não em andamento)
       const plannedRoutes = response.data.filter(route =>
         route.status === 'PLANNED'
       );
@@ -122,15 +152,12 @@ const RoutesList = () => {
 
     setLinking(true);
     try {
-      // Buscar todas as rotas selecionadas
       const routesToCombine = availableRoutes.filter(route =>
         selectedRouteIds.includes(route._id)
       );
 
-      // Coletar todos os pontos das rotas selecionadas
       const allPoints = [];
       for (const route of routesToCombine) {
-        // Buscar detalhes da rota para pegar os pontos completos
         const routeDetails = await axios.get(`${API_URL}/routes/${route._id}`, getAuthHeaders());
         const points = routeDetails.data.points || [];
         points.forEach(point => {
@@ -140,7 +167,6 @@ const RoutesList = () => {
         });
       }
 
-      // Remover duplicatas (mesmo ponto em rotas diferentes)
       const uniquePoints = [];
       const pointIds = new Set();
       for (const point of allPoints) {
@@ -156,7 +182,6 @@ const RoutesList = () => {
         return;
       }
 
-      // Vincular os pontos únicos
       const response = await axios.post(`${API_URL}/routes/link-points`, {
         pointIds: uniquePoints.map(p => p._id),
         routeName: newRouteName || `Rota Combinada - ${routesToCombine.map(r => r.name).join(' + ')}`
@@ -164,7 +189,6 @@ const RoutesList = () => {
 
       alert(response.data.message);
 
-      // Opcional: perguntar se quer deletar as rotas originais
       const deleteOriginal = window.confirm('Deseja deletar as rotas originais após vincular?');
       if (deleteOriginal) {
         for (const route of routesToCombine) {
@@ -176,7 +200,7 @@ const RoutesList = () => {
       setShowLinkModal(false);
       setSelectedRouteIds([]);
       setNewRouteName('');
-      fetchRoutes(); // Recarregar lista de rotas
+      fetchRoutes();
 
     } catch (error) {
       console.error('Erro ao vincular rotas:', error);
@@ -185,7 +209,7 @@ const RoutesList = () => {
       setLinking(false);
     }
   };
-  // Toggle seleção de rota
+
   const toggleRouteSelection = (routeId) => {
     setSelectedRouteIds(prev =>
       prev.includes(routeId)
@@ -196,7 +220,6 @@ const RoutesList = () => {
 
   const TEST_MODE = true;
 
-  // Calcular status baseado na data/hora da coleta
   const calculateRouteStatus = (route) => {
     const now = new Date();
     const routeDate = new Date(route.date);
@@ -215,12 +238,12 @@ const RoutesList = () => {
       return { text: 'Em Andamento', color: '#2196F3', icon: 'fas fa-spinner fa-pulse' };
     }
 
-    // MODO DE TESTE: força status "Hoje" para aparecer o botão
-    if (TEST_MODE && route.status !== 'COMPLETED' && route.status !== 'CANCELLED') {
+    // MODO TESTE: força status "Hoje" para aparecer o botão
+    if (TEST_MODE) {
       return { text: 'Hoje', color: '#9C27B0', icon: 'fas fa-calendar-day' };
     }
 
-    // Calcular diferença em dias (lógica original)
+    // ========== LÓGICA REAL (só executa quando TEST_MODE = false) ==========
     const diffDays = Math.ceil((routeDay - today) / (1000 * 60 * 60 * 24));
 
     // Status baseado na data
@@ -237,7 +260,6 @@ const RoutesList = () => {
     return { text: 'Agendado', color: '#757575', icon: 'fas fa-calendar-week' };
   };
 
-  // Atualizar status da rota manualmente
   const updateRouteStatus = async (routeId, newStatus) => {
     try {
       setLoading(true);
@@ -276,7 +298,6 @@ const RoutesList = () => {
     return `${hours} hora${hours > 1 ? 's' : ''}`;
   };
 
-  // Verificar se um ponto foi coletado
   const isPointCollected = (point) => {
     if (point.collectedAt) return true;
     if (selectedRoute?.status === 'COMPLETED') return true;
@@ -289,6 +310,10 @@ const RoutesList = () => {
     const interval = setInterval(fetchRoutes, 60000);
     return () => clearInterval(interval);
   }, []);
+
+  // ========== ADICIONADO: Calcular total de páginas e rotas atuais ==========
+  const totalPages = Math.ceil(routes.length / routesPerPage);
+  const currentRoutes = getCurrentRoutes();
 
   if (loading && routes.length === 0) {
     return (
@@ -318,13 +343,10 @@ const RoutesList = () => {
           <span className="stat-badge progress">
             <i className="fas fa-play"></i> Em Andamento: {routes.filter(r => r.calculatedStatus?.text === 'Em Andamento' || r.status === 'IN_PROGRESS').length}
           </span>
-          <span className="stat-badge completed">
-            <i className="fas fa-check"></i> Concluídas: {routes.filter(r => r.status === 'COMPLETED').length}
-          </span>
+          {/* ========== REMOVIDO: badge de Concluídas ========== */}
         </div>
       </div>
 
-      {/* Botão Vincular Rotas */}
       <div className="header-actions" style={{ marginBottom: '20px' }}>
         <button
           className="btn-link"
@@ -357,121 +379,156 @@ const RoutesList = () => {
           </p>
         </div>
       ) : (
-        <div className="routes-grid">
-          {routes.map(route => {
-            const statusInfo = route.calculatedStatus;
-            const isCollectionDay = statusInfo?.text === 'Hoje' || statusInfo?.text === 'Amanhã';
-            const isPlanned = route.status === 'PLANNED';
-            const isInProgress = statusInfo?.text === 'Em Andamento' || route.status === 'IN_PROGRESS';
-            const isCompleted = route.status === 'COMPLETED';
-            const isCancelled = route.status === 'CANCELLED';
+        <>
+          <div className="routes-grid">
+            {currentRoutes.map(route => {
+              const statusInfo = route.calculatedStatus;
+              const isInProgress = statusInfo?.text === 'Em Andamento' || route.status === 'IN_PROGRESS';
+              const isCompleted = route.status === 'COMPLETED';
+              const isCancelled = route.status === 'CANCELLED';
 
-            return (
-              <div key={route._id} className={`route-card ${route.status.toLowerCase()}`}>
-                <div className="route-header">
-                  <div className="route-title">
-                    <i className="fas fa-truck"></i>
-                    <h3>{route.name}</h3>
+              return (
+                <div key={route._id} className={`route-card ${route.status.toLowerCase()}`}>
+                  <div className="route-header">
+                    <div className="route-title">
+                      <i className="fas fa-truck"></i>
+                      <h3>{route.name}</h3>
+                    </div>
+                    <div className="status-badge-group">
+                      <span
+                        className="status-badge"
+                        style={{
+                          backgroundColor: statusInfo?.color + '20',
+                          color: statusInfo?.color,
+                          border: `1px solid ${statusInfo?.color}`
+                        }}
+                      >
+                        <i className={statusInfo?.icon}></i>
+                        {statusInfo?.text}
+                      </span>
+                    </div>
                   </div>
-                  <div className="status-badge-group">
-                    <span
-                      className="status-badge"
-                      style={{
-                        backgroundColor: statusInfo?.color + '20',
-                        color: statusInfo?.color,
-                        border: `1px solid ${statusInfo?.color}`
-                      }}
+
+                  <div className="route-info">
+                    <div className="info-item">
+                      <i className="fas fa-calendar-alt"></i>
+                      <span>Data: {new Date(route.date).toLocaleDateString('pt-BR')}</span>
+                    </div>
+                    <div className="info-item">
+                      <i className="fas fa-clock"></i>
+                      <span>Horário: 08:00</span>
+                    </div>
+                    <div className="info-item">
+                      <i className="fas fa-hourglass-half"></i>
+                      <span>Tempo estimado: {calculateEstimatedTime(route.points?.length)}</span>
+                    </div>
+                    <div className="info-item">
+                      <i className="fas fa-map-marker-alt"></i>
+                      <span>{route.points?.length || 0} ponto(s) de coleta</span>
+                    </div>
+                    <div className="info-item">
+                      <i className="fas fa-weight-hanging"></i>
+                      <span>{route.totalWaste || 0} kg estimados</span>
+                    </div>
+                  </div>
+
+                  <div className="route-progress">
+                    <div className="progress-label">
+                      <span>Progresso da Coleta</span>
+                      <span>{isCompleted ? '100%' : isInProgress ? '50%' : '0%'}</span>
+                    </div>
+                    <div className="progress-bar">
+                      <div
+                        className="progress-fill"
+                        style={{
+                          width: isCompleted ? '100%' : isInProgress ? '50%' : '0%',
+                          backgroundColor: isCompleted ? '#4CAF50' : isInProgress ? '#2196F3' : '#ff9800'
+                        }}
+                      ></div>
+                    </div>
+                  </div>
+
+                  <div className="route-footer">
+                    <button
+                      className="btn-view"
+                      onClick={() => handleViewDetails(route)}
                     >
-                      <i className={statusInfo?.icon}></i>
-                      {statusInfo?.text}
-                    </span>
+                      <i className="fas fa-eye"></i> Ver Detalhes
+                    </button>
+
+                    {(route.status === 'PLANNED' || statusInfo?.text === 'Agendado') && (statusInfo?.text === 'Hoje' || statusInfo?.text === 'Amanhã') && (
+                      <button
+                        className="btn-start"
+                        onClick={() => updateRouteStatus(route._id, 'IN_PROGRESS')}
+                      >
+                        <i className="fas fa-play"></i> Iniciar Coleta
+                      </button>
+                    )}
+
+                    {route.status === 'IN_PROGRESS' && (
+                      <button
+                        className="btn-complete"
+                        onClick={() => updateRouteStatus(route._id, 'COMPLETED')}
+                      >
+                        <i className="fas fa-check"></i> Concluir Coleta
+                      </button>
+                    )}
+
+                    {route.status !== 'COMPLETED' && route.status !== 'CANCELLED' && (
+                      <button
+                        className="btn-cancel"
+                        onClick={() => updateRouteStatus(route._id, 'CANCELLED')}
+                      >
+                        <i className="fas fa-times"></i> Cancelar
+                      </button>
+                    )}
                   </div>
                 </div>
+              );
+            })}
+          </div>
 
-                <div className="route-info">
-                  <div className="info-item">
-                    <i className="fas fa-calendar-alt"></i>
-                    <span>Data: {new Date(route.date).toLocaleDateString('pt-BR')}</span>
-                  </div>
-                  <div className="info-item">
-                    <i className="fas fa-clock"></i>
-                    <span>Horário: 08:00</span>
-                  </div>
-                  <div className="info-item">
-                    <i className="fas fa-hourglass-half"></i>
-                    <span>Tempo estimado: {calculateEstimatedTime(route.points?.length)}</span>
-                  </div>
-                  <div className="info-item">
-                    <i className="fas fa-map-marker-alt"></i>
-                    <span>{route.points?.length || 0} ponto(s) de coleta</span>
-                  </div>
-                  <div className="info-item">
-                    <i className="fas fa-weight-hanging"></i>
-                    <span>{route.totalWaste || 0} kg estimados</span>
-                  </div>
-                </div>
+          {/* ========== ADICIONADO: Componente de Paginação ========== */}
+          {totalPages > 1 && (
+            <div className="pagination-container">
+              <button
+                onClick={prevPage}
+                disabled={currentPage === 1}
+                className="pagination-btn"
+              >
+                <i className="fas fa-chevron-left"></i> Anterior
+              </button>
 
-                <div className="route-progress">
-                  <div className="progress-label">
-                    <span>Progresso da Coleta</span>
-                    <span>{isCompleted ? '100%' : isInProgress ? '50%' : '0%'}</span>
-                  </div>
-                  <div className="progress-bar">
-                    <div
-                      className="progress-fill"
-                      style={{
-                        width: isCompleted ? '100%' : isInProgress ? '50%' : '0%',
-                        backgroundColor: isCompleted ? '#4CAF50' : isInProgress ? '#2196F3' : '#ff9800'
-                      }}
-                    ></div>
-                  </div>
-                </div>
-
-                <div className="route-footer">
+              <div className="pagination-numbers">
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map(number => (
                   <button
-                    className="btn-view"
-                    onClick={() => handleViewDetails(route)}
+                    key={number}
+                    onClick={() => paginate(number)}
+                    className={`pagination-number ${currentPage === number ? 'active' : ''}`}
                   >
-                    <i className="fas fa-eye"></i> Ver Detalhes
+                    {number}
                   </button>
-
-                  {/* Botão Iniciar Coleta - aparece para rotas PLANEJADAS ou AGENDADAS com data Hoje/Amanhã */}
-                  {(route.status === 'PLANNED' || statusInfo?.text === 'Agendado') && (statusInfo?.text === 'Hoje' || statusInfo?.text === 'Amanhã') && (
-                    <button
-                      className="btn-start"
-                      onClick={() => updateRouteStatus(route._id, 'IN_PROGRESS')}
-                    >
-                      <i className="fas fa-play"></i> Iniciar Coleta
-                    </button>
-                  )}
-
-                  {/* Botão Concluir Coleta - aparece para rotas EM ANDAMENTO */}
-                  {route.status === 'IN_PROGRESS' && (
-                    <button
-                      className="btn-complete"
-                      onClick={() => updateRouteStatus(route._id, 'COMPLETED')}
-                    >
-                      <i className="fas fa-check"></i> Concluir Coleta
-                    </button>
-                  )}
-
-                  {/* Botão Cancelar - aparece para rotas não concluídas e não canceladas */}
-                  {route.status !== 'COMPLETED' && route.status !== 'CANCELLED' && (
-                    <button
-                      className="btn-cancel"
-                      onClick={() => updateRouteStatus(route._id, 'CANCELLED')}
-                    >
-                      <i className="fas fa-times"></i> Cancelar
-                    </button>
-                  )}
-                </div>
+                ))}
               </div>
-            );
-          })}
-        </div>
+
+              <button
+                onClick={nextPage}
+                disabled={currentPage === totalPages}
+                className="pagination-btn"
+              >
+                Próximo <i className="fas fa-chevron-right"></i>
+              </button>
+            </div>
+          )}
+
+          {/* ========== ADICIONADO: Informação de paginação ========== */}
+          <div className="pagination-info">
+            Mostrando {routes.length > 0 ? ((currentPage - 1) * routesPerPage) + 1 : 0} a {Math.min(currentPage * routesPerPage, routes.length)} de {routes.length} rotas
+          </div>
+        </>
       )}
 
-      {/* MODAL DE VINCULAÇÃO DE ROTAS - VERSÃO MELHORADA */}
+      {/* MODAL DE VINCULAÇÃO DE ROTAS */}
       {showLinkModal && (
         <div className="modal-overlay" onClick={() => setShowLinkModal(false)}>
           <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: '750px' }}>
@@ -484,7 +541,6 @@ const RoutesList = () => {
             </div>
 
             <div className="modal-body">
-              {/* Campo para nome da rota */}
               <div className="form-group route-name-group">
                 <label className="form-label">
                   <i className="fas fa-pen"></i> Nome da Nova Rota
@@ -499,7 +555,6 @@ const RoutesList = () => {
                 />
               </div>
 
-              {/* Lista de rotas disponíveis */}
               <div className="form-group">
                 <label className="form-label">
                   <i className="fas fa-list"></i> Selecione as rotas para vincular
@@ -574,7 +629,6 @@ const RoutesList = () => {
                 )}
               </div>
 
-              {/* Resumo da seleção */}
               <div className={`selection-summary ${selectedRouteIds.length >= 2 ? 'ready' : 'pending'}`}>
                 <div className="summary-left">
                   <i className={`fas ${selectedRouteIds.length >= 2 ? 'fa-check-circle' : 'fa-info-circle'}`}></i>
@@ -617,7 +671,7 @@ const RoutesList = () => {
         </div>
       )}
 
-      {/* MODAL DE DETALHES COM STATUS DOS PONTOS */}
+      {/* MODAL DE DETALHES */}
       {showDetailsModal && selectedRoute && (
         <div className="modal-overlay" onClick={() => setShowDetailsModal(false)}>
           <div className="modal-content" onClick={e => e.stopPropagation()}>
@@ -719,7 +773,6 @@ const RoutesList = () => {
         .stat-badge.planned { background: #fff3e0; color: #ff9800; }
         .stat-badge.today { background: #e3f2fd; color: #2196F3; }
         .stat-badge.progress { background: #e8f5e9; color: #4CAF50; }
-        .stat-badge.completed { background: #e8f5e9; color: #2e7d32; }
         .header-actions {
           margin-bottom: 20px;
         }
@@ -917,6 +970,79 @@ const RoutesList = () => {
           background: #f5f5f5;
           border-radius: 8px;
           text-align: center;
+        }
+        
+        /* ========== ADICIONADO: Estilos da Paginação ========== */
+        .pagination-container {
+          display: flex;
+          justify-content: center;
+          align-items: center;
+          gap: 15px;
+          margin-top: 30px;
+          margin-bottom: 20px;
+          flex-wrap: wrap;
+        }
+        
+        .pagination-btn {
+          background: #4CAF50;
+          color: white;
+          border: none;
+          padding: 10px 20px;
+          border-radius: 8px;
+          cursor: pointer;
+          font-size: 14px;
+          font-weight: 500;
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          transition: all 0.3s;
+        }
+        
+        .pagination-btn:hover:not(:disabled) {
+          background: #388E3C;
+          transform: translateY(-2px);
+        }
+        
+        .pagination-btn:disabled {
+          background: #ccc;
+          cursor: not-allowed;
+        }
+        
+        .pagination-numbers {
+          display: flex;
+          gap: 8px;
+          flex-wrap: wrap;
+        }
+        
+        .pagination-number {
+          width: 40px;
+          height: 40px;
+          border-radius: 8px;
+          border: 1px solid #ddd;
+          background: white;
+          cursor: pointer;
+          font-size: 14px;
+          font-weight: 500;
+          transition: all 0.3s;
+        }
+        
+        .pagination-number:hover {
+          background: #f5f5f5;
+          border-color: #4CAF50;
+        }
+        
+        .pagination-number.active {
+          background: #4CAF50;
+          color: white;
+          border-color: #4CAF50;
+        }
+        
+        .pagination-info {
+          text-align: center;
+          font-size: 14px;
+          color: #666;
+          margin-top: 10px;
+          margin-bottom: 20px;
         }
       `}</style>
     </div>

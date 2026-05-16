@@ -55,6 +55,12 @@ const Sidebar = ({ user, onLogout, unreadCount, isConnected }) => {
           <span>Rotas Otimizadas</span>
         </NavLink>
 
+        {/* ========== ADICIONADO: Histórico de Coletas ========== */}
+        <NavLink to="/dashboard/historico" className={({ isActive }) => isActive ? 'active' : ''}>
+          <i className="fas fa-history"></i>
+          <span>Histórico de Coletas</span>
+        </NavLink>
+
         <NavLink to="/dashboard/impact" className={({ isActive }) => isActive ? 'active' : ''}>
           <i className="fas fa-leaf"></i>
           <span>Impacto Ambiental</span>

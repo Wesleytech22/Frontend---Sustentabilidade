@@ -1,17 +1,18 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
-import { SocketProvider } from './contexts/SocketContext'; // 👈 ADICIONE ESTA LINHA
+import { SocketProvider } from './contexts/SocketContext';
 import PrivateRoute from './components/PrivateRoute';
 import Login from './components/Login';
 import Register from './components/Register';
 import Dashboard from './components/Dashboard';
+import HistoricoRotas from './components/HistoricoRotas'; // 👈 ADICIONE ESTA LINHA
 import './App.css';
 
 function App() {
   return (
     <AuthProvider>
-      <SocketProvider> {/* 👈 ADICIONE ESTE PROVIDER */}
+      <SocketProvider>
         <Router>
           <Routes>
             <Route path="/login" element={<Login />} />
@@ -20,11 +21,14 @@ function App() {
               <PrivateRoute>
                 <Dashboard />
               </PrivateRoute>
-            } />
+            }>
+              {/* 👈 ADICIONE AS ROTAS FILHAS DO DASHBOARD AQUI */}
+              <Route path="historico" element={<HistoricoRotas />} />
+            </Route>
             <Route path="/" element={<Navigate to="/login" replace />} />
           </Routes>
         </Router>
-      </SocketProvider> {/* 👈 FECHE O PROVIDER */}
+      </SocketProvider>
     </AuthProvider>
   );
 }

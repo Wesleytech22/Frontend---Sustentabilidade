@@ -13,6 +13,7 @@ import Chat from './Chat/Chat';
 import Notifications from './Notifications/Notifications';
 import AIAnalysis from './AIAnalysis';
 import Events from './Events';
+import HistoricoRotas from './HistoricoRotas'; // 👈 ADICIONE ESTA LINHA
 import './components.css';
 
 const Dashboard = () => {
@@ -37,6 +38,7 @@ const Dashboard = () => {
     if (path.includes('/points')) return 'Pontos de Coleta';
     if (path.includes('/routes')) return 'Rotas';
     if (path.includes('/optimized-routes')) return 'Rotas Otimizadas';
+    if (path.includes('/historico')) return 'Histórico de Coletas'; // 👈 ADICIONE ESTA LINHA
     if (path.includes('/impact')) return 'Impacto Ambiental';
     if (path.includes('/chat')) return 'Chat em Tempo Real';
     if (path.includes('/notifications')) return 'Notificações';
@@ -50,6 +52,7 @@ const Dashboard = () => {
     if (path.includes('/points')) return 'fas fa-map-marker-alt';
     if (path.includes('/routes')) return 'fas fa-route';
     if (path.includes('/optimized-routes')) return 'fas fa-map-marked-alt';
+    if (path.includes('/historico')) return 'fas fa-history'; // 👈 ADICIONE ESTA LINHA
     if (path.includes('/impact')) return 'fas fa-leaf';
     if (path.includes('/chat')) return 'fas fa-comments';
     if (path.includes('/notifications')) return 'fas fa-bell';
@@ -105,7 +108,7 @@ const Dashboard = () => {
               </span>
             </div>
 
-            {/* Data e Hora - UMA EM CIMA DA OUTRA */}
+            {/* Data e Hora */}
             <div className="datetime" style={{
               display: 'flex',
               flexDirection: 'column',
@@ -134,6 +137,7 @@ const Dashboard = () => {
             <Route path="/points" element={<CollectionPoints />} />
             <Route path="/routes" element={<RoutesList />} />
             <Route path="/optimized-routes" element={<OptimizedRoutes />} />
+            <Route path="/historico" element={<HistoricoRotas />} /> {/* 👈 ADICIONE ESTA ROTA */}
             <Route path="/impact" element={<Impact />} />
             <Route path="/chat" element={<Chat />} />
             <Route path="/chat/:room" element={<Chat />} />
