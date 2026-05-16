@@ -6,7 +6,9 @@ import Sidebar from './Sidebar';
 import NotificationBell from './Notifications/NotificationBell';
 import Home from './Home';
 import CollectionPoints from './CollectionPoints';
+import RegisterCollection from './RegisterCollection';
 import RoutesList from './Routes';
+import OptimizedRoutes from './OptimizedRoutes';
 import Impact from './Impact';
 import Chat from './Chat/Chat';
 import Notifications from './Notifications/Notifications';
@@ -21,36 +23,36 @@ const Dashboard = () => {
   const location = useLocation();
   const [currentTime, setCurrentTime] = useState(new Date());
 
-  // Atualizar relógio
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
     return () => clearInterval(timer);
   }, []);
 
-  // Logout
   const handleLogout = () => {
     logout();
     navigate('/login');
   };
 
-  // Título dinâmico baseado na rota
   const getPageTitle = () => {
     const path = location.pathname;
     if (path.includes('/points')) return 'Pontos de Coleta';
-    if (path.includes('/routes')) return 'Rotas Otimizadas';
+    if (path.includes('/register-collection')) return 'Registrar Coleta';
+    if (path.includes('/routes')) return 'Rotas';
+    if (path.includes('/optimized-routes')) return 'Rotas Otimizadas';
     if (path.includes('/impact')) return 'Impacto Ambiental';
     if (path.includes('/chat')) return 'Chat em Tempo Real';
     if (path.includes('/notifications')) return 'Notificações';
     if (path.includes('/ai')) return 'Análise IA';
-    if (path.includes('/events')) return 'Eventos e Coleta Programada';
+    if (path.includes('/events')) return 'Eventos';
     return 'Dashboard';
   };
 
-  // Ícone dinâmico baseado na rota
   const getPageIcon = () => {
     const path = location.pathname;
     if (path.includes('/points')) return 'fas fa-map-marker-alt';
+    if (path.includes('/register-collection')) return 'fas fa-recycle';
     if (path.includes('/routes')) return 'fas fa-route';
+    if (path.includes('/optimized-routes')) return 'fas fa-map-marked-alt';
     if (path.includes('/impact')) return 'fas fa-leaf';
     if (path.includes('/chat')) return 'fas fa-comments';
     if (path.includes('/notifications')) return 'fas fa-bell';
@@ -59,7 +61,6 @@ const Dashboard = () => {
     return 'fas fa-chart-line';
   };
 
-  // Formatar data atual
   const formatDate = () => {
     return currentTime.toLocaleDateString('pt-BR', {
       weekday: 'short',
@@ -68,7 +69,6 @@ const Dashboard = () => {
     });
   };
 
-  // Formatar hora atual
   const formatTime = () => {
     return currentTime.toLocaleTimeString('pt-BR', {
       hour: '2-digit',
@@ -78,31 +78,26 @@ const Dashboard = () => {
 
   return (
     <div className="dashboard">
-      {/* Sidebar */}
-      <Sidebar 
-        user={user} 
-        onLogout={handleLogout} 
+      <Sidebar
+        user={user}
+        onLogout={handleLogout}
         unreadCount={socketUnreadCount}
         isConnected={isConnected}
       />
-      
-      {/* Conteúdo Principal */}
+
       <div className="main-content">
-        {/* Header */}
         <div className="main-header">
           <div className="header-title">
             <i className={getPageIcon()}></i>
             <h1>{getPageTitle()}</h1>
           </div>
-          
+
           <div className="header-actions">
-            {/* Sino de Notificações */}
-            <NotificationBell 
+            <NotificationBell
               notifications={notifications}
               unreadCount={socketUnreadCount}
             />
 
-            {/* Status de Conexão */}
             <div className={`connection-status ${isConnected ? 'connected' : 'disconnected'}`}>
               <span className="status-dot"></span>
               <span className="status-text">
@@ -110,7 +105,6 @@ const Dashboard = () => {
               </span>
             </div>
 
-            {/* Data e Hora */}
             <div className="datetime">
               <div className="header-date" title="Data">
                 <i className="fas fa-calendar-alt"></i>
@@ -124,12 +118,13 @@ const Dashboard = () => {
           </div>
         </div>
 
-        {/* Rotas */}
         <div className="dashboard-routes">
           <Routes>
             <Route path="/" element={<Home />} />
             <Route path="/points" element={<CollectionPoints />} />
+            <Route path="/register-collection" element={<RegisterCollection />} />
             <Route path="/routes" element={<RoutesList />} />
+            <Route path="/optimized-routes" element={<OptimizedRoutes />} />
             <Route path="/impact" element={<Impact />} />
             <Route path="/chat" element={<Chat />} />
             <Route path="/chat/:room" element={<Chat />} />
