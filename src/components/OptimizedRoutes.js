@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 
-// Importações do Leaflet (instalar: npm install leaflet react-leaflet@4.2.1)
+// Importações do Leaflet
 let MapContainer, TileLayer, Marker, Popup, Polyline;
 let L;
 
@@ -15,7 +15,6 @@ try {
     Polyline = reactLeaflet.Polyline;
     require('leaflet/dist/leaflet.css');
 
-    // Criar ícone personalizado
     delete L.Icon.Default.prototype._getIconUrl;
     L.Icon.Default.mergeOptions({
         iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
@@ -23,17 +22,21 @@ try {
         shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
     });
 } catch (e) {
-    console.warn('Leaflet não instalado');
+    console.warn('Leaflet não instalado. Execute: npm install leaflet react-leaflet@4.2.1');
 }
 
-// Função para criar ícone numerado
-const createNumberedIcon = (number, color = '#4CAF50') => {
-    if (!L) return null;
-    return L.divIcon({
-        html: `<div style="background-color: ${color}; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 14px; border: 2px solid white; box-shadow: 0 2px 5px rgba(0,0,0,0.3);">${number}</div>`,
-        iconSize: [32, 32],
-        className: 'custom-div-icon'
-    });
+// Função para extrair latitude do ponto (suporta os dois formatos)
+const getLatitude = (point) => {
+    if (point.latitude) return point.latitude;
+    if (point.location?.coordinates) return point.location.coordinates[1];
+    return null;
+};
+
+// Função para extrair longitude do ponto (suporta os dois formatos)
+const getLongitude = (point) => {
+    if (point.longitude) return point.longitude;
+    if (point.location?.coordinates) return point.location.coordinates[0];
+    return null;
 };
 
 const OptimizedRoutes = () => {
@@ -45,11 +48,11 @@ const OptimizedRoutes = () => {
     const [mapLoaded, setMapLoaded] = useState(false);
     const [mapCenter, setMapCenter] = useState([-23.5505, -46.6333]);
 
-    // Carregar todas as rotas
     const loadRoutes = async () => {
         try {
             setLoading(true);
             const response = await api.get('/routes');
+            console.log('Rotas carregadas:', response.data);
             setRoutes(response.data);
 
             if (response.data.length > 0) {
@@ -63,45 +66,63 @@ const OptimizedRoutes = () => {
         }
     };
 
-    // Carregar pontos de uma rota específica
     const loadRoutePoints = async (route) => {
         if (!route || !route.points || route.points.length === 0) {
+            console.log('Rota sem pontos');
             setPoints([]);
             return;
         }
 
         try {
             const pointsData = [];
+
             for (const point of route.points) {
-                if (point.pointId) {
-                    const pointId = typeof point.pointId === 'object' ? point.pointId._id : point.pointId;
-                    const response = await api.get(`/points/${pointId}`);
-                    if (response.data && response.data.latitude && response.data.longitude) {
-                        pointsData.push({
-                            ...response.data,
-                            order: point.order,
-                            estimatedVolume: point.estimatedVolume
-                        });
+                const pointId = point.pointId?._id || point.pointId;
+                if (pointId) {
+                    try {
+                        const response = await api.get(`/points/${pointId}`);
+                        const pointData = response.data;
+
+                        // Extrair coordenadas do formato que o backend retorna
+                        const lat = getLatitude(pointData);
+                        const lng = getLongitude(pointData);
+
+                        console.log(`Ponto: ${pointData.name}, lat: ${lat}, lng: ${lng}`);
+
+                        if (lat && lng) {
+                            pointsData.push({
+                                _id: pointData._id,
+                                name: pointData.name,
+                                address: pointData.address,
+                                zipCode: pointData.zipCode,
+                                latitude: lat,
+                                longitude: lng,
+                                order: point.order,
+                                estimatedVolume: point.estimatedVolume,
+                                currentVolume: pointData.currentVolume
+                            });
+                        } else {
+                            console.warn(`Ponto sem coordenadas: ${pointData.name}`);
+                        }
+                    } catch (err) {
+                        console.error('Erro ao buscar ponto:', pointId, err);
                     }
                 }
             }
 
-            // Ordenar por ordem da rota
-            pointsData.sort((a, b) => a.order - b.order);
+            pointsData.sort((a, b) => (a.order || 0) - (b.order || 0));
+            console.log('Pontos carregados:', pointsData);
             setPoints(pointsData);
 
-            // Centralizar mapa no primeiro ponto
-            if (pointsData.length > 0) {
+            if (pointsData.length > 0 && pointsData[0].latitude) {
                 setMapCenter([pointsData[0].latitude, pointsData[0].longitude]);
             }
-
             setMapLoaded(true);
         } catch (error) {
             console.error('Erro ao carregar pontos da rota:', error);
         }
     };
 
-    // Quando mudar a rota selecionada
     useEffect(() => {
         if (selectedRoute) {
             loadRoutePoints(selectedRoute);
@@ -111,6 +132,15 @@ const OptimizedRoutes = () => {
     useEffect(() => {
         loadRoutes();
     }, []);
+
+    const createNumberedIcon = (number, color = '#4CAF50') => {
+        if (!L) return null;
+        return L.divIcon({
+            html: `<div style="background-color: ${color}; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 14px; border: 2px solid white; box-shadow: 0 2px 5px rgba(0,0,0,0.3);">${number}</div>`,
+            iconSize: [32, 32],
+            className: 'custom-div-icon'
+        });
+    };
 
     const handleRouteChange = (routeId) => {
         const route = routes.find(r => r._id === routeId);
@@ -126,250 +156,101 @@ const OptimizedRoutes = () => {
         );
     }
 
+    // Filtrar apenas pontos com coordenadas válidas
+    const validPoints = points.filter(p => p.latitude && p.longitude);
+
     return (
         <div className="optimized-routes-container" style={{ padding: '20px' }}>
-            {/* Cabeçalho com Filtro */}
-            <div className="routes-header" style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                marginBottom: '20px',
-                flexWrap: 'wrap',
-                gap: '15px'
-            }}>
-                <h2 style={{ margin: 0 }}>
-                    <i className="fas fa-map-marked-alt"></i> Rotas Otimizadas
-                </h2>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '15px' }}>
+                <h2><i className="fas fa-map-marked-alt"></i> Rotas Otimizadas</h2>
 
-                {/* Filtro de rotas */}
-                <div className="filter-section" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    <label style={{ fontWeight: 'bold', color: '#555' }}>
-                        <i className="fas fa-filter"></i> Filtrar Rota:
-                    </label>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <label><i className="fas fa-filter"></i> Filtrar Rota:</label>
                     <select
                         value={selectedRoute?._id || ''}
                         onChange={(e) => handleRouteChange(e.target.value)}
-                        style={{
-                            padding: '10px 15px',
-                            borderRadius: '8px',
-                            border: '1px solid #ddd',
-                            backgroundColor: 'white',
-                            minWidth: '250px',
-                            cursor: 'pointer'
-                        }}
+                        style={{ padding: '10px 15px', borderRadius: '8px', border: '1px solid #ddd', minWidth: '250px' }}
                     >
-                        {routes.length === 0 ? (
-                            <option value="">Nenhuma rota disponível</option>
-                        ) : (
+                        {routes.length === 0 ? <option value="">Nenhuma rota disponível</option> :
                             routes.map(route => (
                                 <option key={route._id} value={route._id}>
-                                    {route.name} - {new Date(route.date).toLocaleDateString('pt-BR')}
-                                    ({route.points?.length || 0} pontos)
+                                    {route.name} - {new Date(route.date).toLocaleDateString('pt-BR')} ({route.points?.length || 0} pontos)
                                 </option>
-                            ))
-                        )}
+                            ))}
                     </select>
                 </div>
             </div>
 
-            {/* Cards de informações da rota selecionada */}
             {selectedRoute && (
-                <div className="route-info-cards" style={{
-                    display: 'grid',
-                    gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-                    gap: '15px',
-                    marginBottom: '20px'
-                }}>
-                    <div className="info-card" style={{ background: '#e8f5e9', padding: '15px', borderRadius: '8px' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                            <i className="fas fa-route" style={{ fontSize: '24px', color: '#4CAF50' }}></i>
-                            <div>
-                                <div style={{ fontSize: '12px', color: '#666' }}>Nome da Rota</div>
-                                <div style={{ fontWeight: 'bold' }}>{selectedRoute.name}</div>
-                            </div>
-                        </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '15px', marginBottom: '20px' }}>
+                    <div style={{ background: '#e8f5e9', padding: '15px', borderRadius: '8px' }}>
+                        <i className="fas fa-route"></i> <strong>Rota:</strong> {selectedRoute.name}
                     </div>
-                    <div className="info-card" style={{ background: '#e3f2fd', padding: '15px', borderRadius: '8px' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                            <i className="fas fa-map-marker-alt" style={{ fontSize: '24px', color: '#2196F3' }}></i>
-                            <div>
-                                <div style={{ fontSize: '12px', color: '#666' }}>Pontos de Coleta</div>
-                                <div style={{ fontWeight: 'bold' }}>{points.length} pontos</div>
-                            </div>
-                        </div>
+                    <div style={{ background: '#e3f2fd', padding: '15px', borderRadius: '8px' }}>
+                        <i className="fas fa-map-marker-alt"></i> <strong>Pontos:</strong> {validPoints.length} / {points.length}
                     </div>
-                    <div className="info-card" style={{ background: '#fff3e0', padding: '15px', borderRadius: '8px' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                            <i className="fas fa-road" style={{ fontSize: '24px', color: '#FF9800' }}></i>
-                            <div>
-                                <div style={{ fontSize: '12px', color: '#666' }}>Distância Total</div>
-                                <div style={{ fontWeight: 'bold' }}>{selectedRoute.totalDistance?.toFixed(2) || 0} km</div>
-                            </div>
-                        </div>
+                    <div style={{ background: '#fff3e0', padding: '15px', borderRadius: '8px' }}>
+                        <i className="fas fa-road"></i> <strong>Distância:</strong> {selectedRoute.totalDistance?.toFixed(2) || 0} km
                     </div>
-                    <div className="info-card" style={{ background: '#fce4ec', padding: '15px', borderRadius: '8px' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                            <i className="fas fa-weight-hanging" style={{ fontSize: '24px', color: '#E91E63' }}></i>
-                            <div>
-                                <div style={{ fontSize: '12px', color: '#666' }}>Resíduos Estimados</div>
-                                <div style={{ fontWeight: 'bold' }}>{selectedRoute.totalWaste || 0} kg</div>
-                            </div>
-                        </div>
+                    <div style={{ background: '#fce4ec', padding: '15px', borderRadius: '8px' }}>
+                        <i className="fas fa-weight-hanging"></i> <strong>Resíduos:</strong> {selectedRoute.totalWaste || 0} kg
                     </div>
                 </div>
             )}
 
-            {/* Mapa */}
-            <div className="map-container" style={{
-                height: '500px',
-                marginTop: '20px',
-                borderRadius: '12px',
-                overflow: 'hidden',
-                border: '1px solid #ddd',
-                boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
-            }}>
-                {mapLoaded && points.length > 0 && MapContainer ? (
+            <div style={{ height: '500px', borderRadius: '12px', overflow: 'hidden', border: '1px solid #ddd', marginBottom: '20px' }}>
+                {mapLoaded && validPoints.length > 0 && MapContainer ? (
                     <MapContainer center={mapCenter} zoom={13} style={{ height: '100%', width: '100%' }}>
-                        <TileLayer
-                            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-                        />
-
-                        {/* Linha da rota */}
-                        {points.length > 1 && (
-                            <Polyline
-                                positions={points.map(p => [p.latitude, p.longitude])}
-                                color="#4CAF50"
-                                weight={4}
-                                opacity={0.8}
-                                dashArray="10, 10"
-                            />
+                        <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+                        {validPoints.length > 1 && (
+                            <Polyline positions={validPoints.map(p => [p.latitude, p.longitude])} color="#4CAF50" weight={4} />
                         )}
-
-                        {/* Marcadores numerados para cada ponto */}
-                        {points.map((point, idx) => {
-                            const customIcon = createNumberedIcon(idx + 1, idx === 0 ? '#4CAF50' : '#2196F3');
-                            return (
-                                <Marker
-                                    key={point._id}
-                                    position={[point.latitude, point.longitude]}
-                                    icon={customIcon}
-                                >
-                                    <Popup>
-                                        <div style={{ minWidth: '200px' }}>
-                                            <strong style={{ fontSize: '14px' }}>📍 {point.name}</strong><br />
-                                            <span style={{ fontSize: '12px', color: '#666' }}>Ordem: #{idx + 1}</span><br />
-                                            <span style={{ fontSize: '12px' }}>📦 Volume: {point.estimatedVolume || point.currentVolume || 0} kg</span><br />
-                                            <span style={{ fontSize: '11px', color: '#999' }}>{point.address}</span>
-                                        </div>
-                                    </Popup>
-                                </Marker>
-                            );
-                        })}
+                        {validPoints.map((point, idx) => (
+                            <Marker
+                                key={point._id}
+                                position={[point.latitude, point.longitude]}
+                                icon={createNumberedIcon(idx + 1, idx === 0 ? '#4CAF50' : '#2196F3')}
+                            >
+                                <Popup>
+                                    <strong>{point.name}</strong><br />
+                                    {point.address}<br />
+                                    Ordem: #{idx + 1}<br />
+                                    Volume: {point.estimatedVolume || point.currentVolume || 0} kg
+                                </Popup>
+                            </Marker>
+                        ))}
                     </MapContainer>
                 ) : (
-                    <div style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        height: '100%',
-                        background: '#f9f9f9',
-                        flexDirection: 'column'
-                    }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', background: '#f9f9f9', flexDirection: 'column' }}>
                         <i className="fas fa-map-marked-alt" style={{ fontSize: '48px', color: '#ccc', marginBottom: '15px' }}></i>
                         <p style={{ color: '#666' }}>
-                            {points.length === 0 ? 'Selecione uma rota para visualizar no mapa' : 'Carregando mapa...'}
+                            {points.length === 0 ? 'Selecione uma rota para visualizar' :
+                                validPoints.length === 0 ? 'Os pontos desta rota não têm coordenadas' : 'Carregando mapa...'}
                         </p>
-                        <p style={{ fontSize: '12px', color: '#999' }}>
-                            {routes.length === 0 ? 'Nenhuma rota cadastrada. Crie pontos de coleta com coordenadas!' : ''}
-                        </p>
+                        {points.length > 0 && validPoints.length === 0 && (
+                            <p style={{ fontSize: '12px', color: '#999', marginTop: '10px' }}>
+                                Para visualizar no mapa, edite os pontos e adicione latitude/longitude.
+                            </p>
+                        )}
                     </div>
                 )}
             </div>
 
-            {/* Lista da rota com pontos ordenados */}
             {selectedRoute && points.length > 0 && (
-                <div className="route-details" style={{
-                    marginTop: '20px',
-                    background: '#f9f9f9',
-                    padding: '20px',
-                    borderRadius: '12px',
-                    boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
-                }}>
-                    <h3 style={{ marginBottom: '15px', display: 'flex', alignItems: 'center', gap: '10px' }}>
-                        <i className="fas fa-list-ol"></i> Sequência da Coleta
-                    </h3>
-                    <div className="route-points-list" style={{ maxHeight: '300px', overflowY: 'auto' }}>
-                        {points.map((point, idx) => (
-                            <div key={point._id} style={{
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '15px',
-                                padding: '12px',
-                                borderBottom: '1px solid #eee',
-                                backgroundColor: idx % 2 === 0 ? '#fff' : '#f5f5f5',
-                                borderRadius: '8px',
-                                marginBottom: '5px'
-                            }}>
-                                <div style={{
-                                    width: '36px',
-                                    height: '36px',
-                                    background: idx === 0 ? '#4CAF50' : '#2196F3',
-                                    color: 'white',
-                                    borderRadius: '50%',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    fontWeight: 'bold',
-                                    fontSize: '16px'
-                                }}>
-                                    {idx + 1}
-                                </div>
-                                <div style={{ flex: 1 }}>
-                                    <strong>{point.name}</strong>
-                                    <p style={{ margin: '2px 0 0', fontSize: '12px', color: '#666' }}>
-                                        <i className="fas fa-map-marker-alt" style={{ marginRight: '5px' }}></i>
-                                        {point.address}
-                                    </p>
-                                </div>
-                                <div style={{ textAlign: 'right' }}>
-                                    <span style={{ fontSize: '12px', color: '#666' }}>
-                                        <i className="fas fa-weight-hanging"></i> {point.estimatedVolume || point.currentVolume || 0} kg
-                                    </span>
-                                    <br />
-                                    <span style={{ fontSize: '11px', color: '#999', fontFamily: 'monospace' }}>
-                                        {point.latitude?.toFixed(4)}, {point.longitude?.toFixed(4)}
-                                    </span>
-                                </div>
+                <div style={{ background: '#f9f9f9', padding: '20px', borderRadius: '12px' }}>
+                    <h3 style={{ marginBottom: '15px' }}>Sequência da Coleta</h3>
+                    {points.map((point, idx) => (
+                        <div key={point._id} style={{ display: 'flex', alignItems: 'center', gap: '15px', padding: '10px', borderBottom: '1px solid #eee' }}>
+                            <div style={{ width: '36px', height: '36px', background: idx === 0 ? '#4CAF50' : '#2196F3', color: 'white', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{idx + 1}</div>
+                            <div style={{ flex: 1 }}>
+                                <strong>{point.name}</strong>
+                                <br />
+                                <small>{point.address}</small>
+                                {!point.latitude && <span style={{ color: '#ff9800', fontSize: '11px', marginLeft: '8px' }}>⚠️ Sem coordenadas</span>}
                             </div>
-                        ))}
-                    </div>
-
-                    <div className="route-summary" style={{
-                        marginTop: '20px',
-                        paddingTop: '15px',
-                        borderTop: '2px solid #ddd',
-                        display: 'flex',
-                        gap: '20px',
-                        justifyContent: 'space-around',
-                        flexWrap: 'wrap'
-                    }}>
-                        <div style={{ textAlign: 'center' }}>
-                            <i className="fas fa-road" style={{ color: '#FF9800' }}></i>
-                            <div><strong>Distância total</strong></div>
-                            <div>{selectedRoute.totalDistance?.toFixed(2) || 0} km</div>
+                            <div>{point.estimatedVolume || point.currentVolume || 0} kg</div>
                         </div>
-                        <div style={{ textAlign: 'center' }}>
-                            <i className="fas fa-gas-pump" style={{ color: '#2196F3' }}></i>
-                            <div><strong>Combustível estimado</strong></div>
-                            <div>{((selectedRoute.totalDistance || 0) * 0.35).toFixed(2)} L</div>
-                        </div>
-                        <div style={{ textAlign: 'center' }}>
-                            <i className="fas fa-leaf" style={{ color: '#4CAF50' }}></i>
-                            <div><strong>CO₂ estimado</strong></div>
-                            <div>{((selectedRoute.totalWaste || 0) * 0.13).toFixed(2)} kg</div>
-                        </div>
-                    </div>
+                    ))}
                 </div>
             )}
         </div>

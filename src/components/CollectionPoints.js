@@ -14,12 +14,11 @@ const CollectionPoints = () => {
   const [searchingCep, setSearchingCep] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
+    number: '',        // 👈 NOVO CAMPO
     address: '',
     city: '',
     state: '',
     zipCode: '',
-    latitude: '',
-    longitude: '',
     wasteTypes: [],
     capacity: ''
   });
@@ -61,16 +60,22 @@ const CollectionPoints = () => {
 
       if (response.data.success) {
         const data = response.data.data;
+
+        let message = 'Endereço encontrado! ';
+        if (data.hasCoordinates) {
+          message += `Coordenadas: ${data.latitude?.toFixed(4)}, ${data.longitude?.toFixed(4)}`;
+        } else {
+          message += 'Coordenadas não disponíveis para este CEP.';
+        }
+        alert(message);
+
         setFormData(prev => ({
           ...prev,
-          address: data.address || prev.address,
-          city: data.city || prev.city,
-          state: data.state || prev.state,
-          latitude: data.latitude || '',
-          longitude: data.longitude || '',
+          address: data.address || '',
+          city: data.city || '',
+          state: data.state || '',
           zipCode: cleanCep
         }));
-        alert('Endereço encontrado! Verifique os dados e confirme.');
       } else {
         alert('CEP não encontrado');
       }
@@ -122,12 +127,11 @@ const CollectionPoints = () => {
     setEditingPoint(point);
     setFormData({
       name: point.name || '',
+      number: point.number || '',
       address: point.address || '',
       city: point.city || '',
       state: point.state || '',
       zipCode: point.zipCode || '',
-      latitude: point.latitude || '',
-      longitude: point.longitude || '',
       wasteTypes: point.wasteTypes || [],
       capacity: point.capacity || ''
     });
@@ -140,20 +144,28 @@ const CollectionPoints = () => {
     setSuccess('');
 
     try {
-      if (!formData.name || !formData.address || !formData.capacity) {
+      if (!formData.name || !formData.address || !formData.zipCode || !formData.capacity) {
         throw new Error('Preencha todos os campos obrigatórios');
       }
 
+      if (formData.zipCode.replace(/\D/g, '').length !== 8) {
+        throw new Error('CEP inválido. Digite um CEP com 8 dígitos.');
+      }
+
+      // Construir endereço completo com número
+      const fullAddress = formData.number
+        ? `${formData.address}, ${formData.number}`
+        : formData.address;
+
       const pointData = {
         name: formData.name,
-        address: formData.address,
+        number: formData.number,
+        address: fullAddress,
         city: formData.city || '',
         state: formData.state?.toUpperCase() || '',
         zipCode: formData.zipCode || '',
         wasteTypes: formData.wasteTypes,
-        capacity: parseFloat(formData.capacity),
-        latitude: formData.latitude ? parseFloat(formData.latitude) : null,
-        longitude: formData.longitude ? parseFloat(formData.longitude) : null
+        capacity: parseFloat(formData.capacity)
       };
 
       const response = await api.put(`/points/${editingPoint._id}`, pointData);
@@ -165,12 +177,11 @@ const CollectionPoints = () => {
         setEditingPoint(null);
         setFormData({
           name: '',
+          number: '',
           address: '',
           city: '',
           state: '',
           zipCode: '',
-          latitude: '',
-          longitude: '',
           wasteTypes: [],
           capacity: ''
         });
@@ -192,20 +203,28 @@ const CollectionPoints = () => {
     setSuccess('');
 
     try {
-      if (!formData.name || !formData.address || !formData.capacity) {
+      if (!formData.name || !formData.address || !formData.zipCode || !formData.capacity) {
         throw new Error('Preencha todos os campos obrigatórios');
       }
 
+      if (formData.zipCode.replace(/\D/g, '').length !== 8) {
+        throw new Error('CEP inválido. Digite um CEP com 8 dígitos.');
+      }
+
+      // Construir endereço completo com número
+      const fullAddress = formData.number
+        ? `${formData.address}, ${formData.number}`
+        : formData.address;
+
       const pointData = {
         name: formData.name,
-        address: formData.address,
+        number: formData.number,
+        address: fullAddress,
         city: formData.city || '',
         state: formData.state?.toUpperCase() || '',
         zipCode: formData.zipCode || '',
         wasteTypes: formData.wasteTypes,
-        capacity: parseFloat(formData.capacity),
-        latitude: formData.latitude ? parseFloat(formData.latitude) : null,
-        longitude: formData.longitude ? parseFloat(formData.longitude) : null
+        capacity: parseFloat(formData.capacity)
       };
 
       const response = await api.post('/points', pointData);
@@ -216,12 +235,11 @@ const CollectionPoints = () => {
         setShowModal(false);
         setFormData({
           name: '',
+          number: '',
           address: '',
           city: '',
           state: '',
           zipCode: '',
-          latitude: '',
-          longitude: '',
           wasteTypes: [],
           capacity: ''
         });
@@ -367,6 +385,12 @@ const CollectionPoints = () => {
                 <span>{point.address}, {point.city} - {point.state}</span>
               </div>
 
+              {point.zipCode && (
+                <div className="point-zipcode" style={{ fontSize: '12px', color: '#666', marginBottom: '8px' }}>
+                  <i className="fas fa-mail-bulk"></i> CEP: {point.zipCode}
+                </div>
+              )}
+
               {point.wasteTypes && point.wasteTypes.length > 0 && (
                 <div className="point-types">
                   {point.wasteTypes.map(type => (
@@ -389,6 +413,12 @@ const CollectionPoints = () => {
                   ></div>
                 </div>
               </div>
+
+              {point.latitude && point.longitude && (
+                <div className="point-coordinates" style={{ fontSize: '11px', color: '#999', marginTop: '8px' }}>
+                  <i className="fas fa-globe"></i> Coordenadas: {point.latitude.toFixed(4)}, {point.longitude.toFixed(4)}
+                </div>
+              )}
 
               <div className="point-footer">
                 <span className={`status-badge ${point.status?.toLowerCase() || 'active'}`}>
@@ -424,7 +454,7 @@ const CollectionPoints = () => {
                 </div>
 
                 <div className="form-group">
-                  <label>CEP (opcional - preenche automaticamente)</label>
+                  <label>CEP *</label>
                   <div style={{ display: 'flex', gap: '10px' }}>
                     <input
                       type="text"
@@ -439,6 +469,7 @@ const CollectionPoints = () => {
                       }}
                       placeholder="00000-000"
                       maxLength="9"
+                      required
                       disabled={saving || searchingCep}
                       style={{ flex: 1 }}
                     />
@@ -450,14 +481,27 @@ const CollectionPoints = () => {
                 </div>
 
                 <div className="form-group">
-                  <label>Endereço *</label>
+                  <label>Logradouro *</label>
                   <input
                     type="text"
                     name="address"
                     value={formData.address}
                     onChange={handleInputChange}
                     required
-                    placeholder="Ex: Rua Augusta, 500"
+                    placeholder="Ex: Rua Augusta"
+                    disabled={saving}
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>Número *</label>
+                  <input
+                    type="text"
+                    name="number"
+                    value={formData.number}
+                    onChange={handleInputChange}
+                    required
+                    placeholder="Ex: 500"
                     disabled={saving}
                   />
                 </div>
@@ -484,34 +528,6 @@ const CollectionPoints = () => {
                       onChange={handleInputChange}
                       maxLength="2"
                       placeholder="SP"
-                      disabled={saving}
-                    />
-                  </div>
-                </div>
-
-                <div className="form-row">
-                  <div className="form-group">
-                    <label>Latitude</label>
-                    <input
-                      type="number"
-                      step="any"
-                      name="latitude"
-                      value={formData.latitude}
-                      onChange={handleInputChange}
-                      placeholder="-23.5505"
-                      disabled={saving}
-                    />
-                  </div>
-
-                  <div className="form-group">
-                    <label>Longitude</label>
-                    <input
-                      type="number"
-                      step="any"
-                      name="longitude"
-                      value={formData.longitude}
-                      onChange={handleInputChange}
-                      placeholder="-46.6333"
                       disabled={saving}
                     />
                   </div>
@@ -605,14 +621,47 @@ const CollectionPoints = () => {
                 </div>
 
                 <div className="form-group">
-                  <label>Endereço *</label>
+                  <label>CEP *</label>
+                  <input
+                    type="text"
+                    name="zipCode"
+                    value={formData.zipCode}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      setFormData({ ...formData, zipCode: value });
+                      if (value.replace(/\D/g, '').length === 8) {
+                        searchAddressByCep(value);
+                      }
+                    }}
+                    placeholder="00000-000"
+                    maxLength="9"
+                    required
+                    disabled={saving || searchingCep}
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>Logradouro *</label>
                   <input
                     type="text"
                     name="address"
                     value={formData.address}
                     onChange={handleInputChange}
                     required
-                    placeholder="Ex: Rua Augusta, 500"
+                    placeholder="Ex: Rua Augusta"
+                    disabled={saving}
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>Número *</label>
+                  <input
+                    type="text"
+                    name="number"
+                    value={formData.number}
+                    onChange={handleInputChange}
+                    required
+                    placeholder="Ex: 500"
                     disabled={saving}
                   />
                 </div>
@@ -639,34 +688,6 @@ const CollectionPoints = () => {
                       onChange={handleInputChange}
                       maxLength="2"
                       placeholder="SP"
-                      disabled={saving}
-                    />
-                  </div>
-                </div>
-
-                <div className="form-row">
-                  <div className="form-group">
-                    <label>Latitude</label>
-                    <input
-                      type="number"
-                      step="any"
-                      name="latitude"
-                      value={formData.latitude}
-                      onChange={handleInputChange}
-                      placeholder="-23.5505"
-                      disabled={saving}
-                    />
-                  </div>
-
-                  <div className="form-group">
-                    <label>Longitude</label>
-                    <input
-                      type="number"
-                      step="any"
-                      name="longitude"
-                      value={formData.longitude}
-                      onChange={handleInputChange}
-                      placeholder="-46.6333"
                       disabled={saving}
                     />
                   </div>
