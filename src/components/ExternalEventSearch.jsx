@@ -26,7 +26,9 @@ const ExternalEventSearch = ({ onEventImported }) => {
                     size: 20
                 }
             });
-            
+
+            console.log('Eventos encontrados:', response.data);
+
             if (response.data.events && response.data.events.length > 0) {
                 setEvents(response.data.events);
                 setShowModal(true);
@@ -44,12 +46,36 @@ const ExternalEventSearch = ({ onEventImported }) => {
     const importEvent = async (event) => {
         setImporting(event.externalId);
         try {
-            const response = await api.post(`/events/external/import/${event.externalId}`);
-            alert(`✅ Evento "${response.data.event.name}" importado com sucesso!`);
+            // Enviar todos os dados do evento para o backend
+            const response = await api.post(`/events/external/import/${event.externalId}`, {
+                name: event.name,
+                description: event.description || `Evento importado da Ticketmaster: ${event.name}`,
+                startDate: event.startDate,
+                endDate: event.endDate || event.startDate,
+                venueName: event.venueName,
+                address: event.address || '',
+                city: event.city || '',
+                state: event.state || '',
+                zipCode: event.zipCode || '',
+                imageUrl: event.imageUrl || '',
+                eventUrl: event.eventUrl || '',
+                expectedAttendees: event.expectedAttendees || 5000,
+                estimatedWaste: event.estimatedWaste || 2500,
+                classification: event.classification || 'Music'
+            });
+
+            console.log('Importação concluída:', response.data);
+
+            alert(`✅ ${response.data.message || `Evento "${event.name}" importado com sucesso!`}`);
+
             setShowModal(false);
             setSearchTerm('');
             setCity('');
-            if (onEventImported) onEventImported();
+            setEvents([]);
+
+            if (onEventImported) {
+                onEventImported(response.data);
+            }
         } catch (error) {
             console.error('Erro ao importar:', error);
             alert(error.response?.data?.error || 'Erro ao importar evento');
@@ -58,19 +84,25 @@ const ExternalEventSearch = ({ onEventImported }) => {
         }
     };
 
+    // Buscar eventos por classificação
+    const searchByClassification = async (classification) => {
+        setSearchTerm(classification);
+        setCity('');
+        await searchExternalEvents();
+    };
+
     return (
         <>
             <div className="external-search-wrapper">
-                <button 
-                    className="btn-external" 
+                <button
+                    className="btn-external"
                     onClick={searchExternalEvents}
                     disabled={loading}
                 >
                     <i className="fas fa-globe"></i>
                     {loading ? 'Buscando...' : 'Buscar Eventos Externos'}
                 </button>
-                
-                {/* Modal de busca rápida */}
+
                 <div className="external-search-quick">
                     <input
                         type="text"
@@ -90,12 +122,28 @@ const ExternalEventSearch = ({ onEventImported }) => {
                 </div>
             </div>
 
+            {/* Botões de Busca Rápida por Classificação */}
+            <div className="quick-search-buttons" style={{ display: 'flex', gap: '8px', marginTop: '10px', flexWrap: 'wrap' }}>
+                <button className="btn-quick" onClick={() => searchByClassification('music')}>
+                    <i className="fas fa-music"></i> Shows
+                </button>
+                <button className="btn-quick" onClick={() => searchByClassification('sports')}>
+                    <i className="fas fa-futbol"></i> Esportes
+                </button>
+                <button className="btn-quick" onClick={() => searchByClassification('arts')}>
+                    <i className="fas fa-palette"></i> Artes
+                </button>
+                <button className="btn-quick" onClick={() => searchByClassification('festival')}>
+                    <i className="fas fa-tree"></i> Festivais
+                </button>
+            </div>
+
             {showModal && (
                 <div className="modal-overlay" onClick={() => setShowModal(false)}>
                     <div className="modal-content large" onClick={e => e.stopPropagation()}>
                         <div className="modal-header">
                             <h2>
-                                <i className="fas fa-globe"></i> 
+                                <i className="fas fa-globe"></i>
                                 Eventos Encontrados - Ticketmaster
                             </h2>
                             <button className="close" onClick={() => setShowModal(false)}>&times;</button>
@@ -120,28 +168,32 @@ const ExternalEventSearch = ({ onEventImported }) => {
                                                     </p>
                                                 )}
                                                 <p className="address">
-                                                    <i className="fas fa-map-marker-alt"></i> 
-                                                    {event.address}, {event.city} - {event.state}
+                                                    <i className="fas fa-map-marker-alt"></i>
+                                                    {event.address ? `${event.address}, ` : ''}{event.city} - {event.state}
                                                 </p>
                                                 <p className="date">
-                                                    <i className="fas fa-calendar"></i> 
+                                                    <i className="fas fa-calendar"></i>
                                                     {new Date(event.startDate).toLocaleDateString('pt-BR')}
-                                                    {event.endDate !== event.startDate && 
+                                                    {event.endDate && event.endDate !== event.startDate &&
                                                         ` até ${new Date(event.endDate).toLocaleDateString('pt-BR')}`
                                                     }
                                                 </p>
                                                 <div className="stats">
                                                     <span>
-                                                        <i className="fas fa-users"></i> 
-                                                        {event.expectedAttendees.toLocaleString()} pessoas
+                                                        <i className="fas fa-users"></i>
+                                                        {event.expectedAttendees?.toLocaleString() || 5000} pessoas
                                                     </span>
                                                     <span>
-                                                        <i className="fas fa-trash-alt"></i> 
-                                                        {event.estimatedWaste.toLocaleString()} kg estimados
+                                                        <i className="fas fa-trash-alt"></i>
+                                                        {event.estimatedWaste?.toLocaleString() || 2500} kg estimados
+                                                    </span>
+                                                    <span className="classification-badge">
+                                                        <i className="fas fa-tag"></i>
+                                                        {event.classification || 'Evento'}
                                                     </span>
                                                 </div>
                                             </div>
-                                            <button 
+                                            <button
                                                 className="btn-import"
                                                 onClick={() => importEvent(event)}
                                                 disabled={importing === event.externalId}
@@ -172,10 +224,12 @@ const ExternalEventSearch = ({ onEventImported }) => {
                     display: flex;
                     gap: 10px;
                     align-items: center;
+                    flex-wrap: wrap;
                 }
                 .external-search-quick {
                     display: flex;
                     gap: 8px;
+                    flex-wrap: wrap;
                 }
                 .external-search-quick input {
                     padding: 8px 12px;
@@ -191,10 +245,29 @@ const ExternalEventSearch = ({ onEventImported }) => {
                     border-radius: 6px;
                     cursor: pointer;
                     font-weight: 500;
+                    transition: all 0.3s;
                 }
-                .btn-external:hover {
+                .btn-external:hover:not(:disabled) {
                     transform: translateY(-2px);
                     box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+                }
+                .btn-external:disabled {
+                    opacity: 0.7;
+                    cursor: not-allowed;
+                }
+                .btn-quick {
+                    background: #f0f0f0;
+                    border: 1px solid #ddd;
+                    padding: 6px 12px;
+                    border-radius: 20px;
+                    cursor: pointer;
+                    font-size: 12px;
+                    transition: all 0.3s;
+                }
+                .btn-quick:hover {
+                    background: #4CAF50;
+                    color: white;
+                    border-color: #4CAF50;
                 }
                 .external-events-list {
                     max-height: 500px;
@@ -227,34 +300,43 @@ const ExternalEventSearch = ({ onEventImported }) => {
                 .event-info h3 {
                     margin: 0 0 8px 0;
                     color: #333;
+                    font-size: 16px;
                 }
                 .event-info .venue {
                     color: #666;
                     margin: 4px 0;
-                    font-size: 14px;
+                    font-size: 13px;
                 }
                 .event-info .address {
                     color: #888;
                     margin: 4px 0;
-                    font-size: 13px;
+                    font-size: 12px;
                 }
                 .event-info .date {
                     color: #667eea;
                     margin: 4px 0;
-                    font-size: 13px;
+                    font-size: 12px;
                     font-weight: 500;
                 }
                 .stats {
                     display: flex;
-                    gap: 16px;
+                    gap: 12px;
                     margin-top: 8px;
+                    flex-wrap: wrap;
                 }
                 .stats span {
-                    font-size: 12px;
+                    font-size: 11px;
                     color: #666;
                     background: #f0f0f0;
                     padding: 4px 8px;
                     border-radius: 4px;
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 4px;
+                }
+                .classification-badge {
+                    background: #e3f2fd !important;
+                    color: #1976d2 !important;
                 }
                 .stats i {
                     margin-right: 4px;
@@ -263,22 +345,30 @@ const ExternalEventSearch = ({ onEventImported }) => {
                     background: #28a745;
                     color: white;
                     border: none;
-                    padding: 8px 16px;
+                    padding: 8px 20px;
                     border-radius: 6px;
                     cursor: pointer;
                     height: 40px;
                     align-self: center;
+                    transition: all 0.3s;
+                    font-weight: 500;
                 }
-                .btn-import:hover {
+                .btn-import:hover:not(:disabled) {
                     background: #218838;
+                    transform: scale(1.02);
                 }
-                .source-badge {
-                    font-size: 12px;
-                    margin-left: 8px;
+                .btn-import:disabled {
+                    opacity: 0.7;
+                    cursor: not-allowed;
                 }
                 .modal-content.large {
                     max-width: 800px;
                     width: 90%;
+                }
+                .no-results {
+                    text-align: center;
+                    padding: 40px;
+                    color: #999;
                 }
             `}</style>
         </>
